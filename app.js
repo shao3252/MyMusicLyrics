@@ -1324,9 +1324,12 @@ async function initializeApp() {
   } catch (error) {
     console.error("Application initialization failed:", error);
 
-    showToast(
-      "App initialization failed. Check your files and storage."
-    );
+   showToast(
+  "Startup error: " + (error.message || String(error)),
+  8000
+   );
+
+   console.error("Full startup error:", error);
   }
 }
 
