@@ -913,13 +913,21 @@ function setupLyricsEditor() {
             .join("\n")
         : "";
 
-    $("lyricsEditor")?.classList.add("active");
+    const editor = $("lyricsEditor");
+    if (editor) {
+      editor.hidden = false;
+      editor.classList.add("active");
+    }
 
     state.editingLyrics = true;
   });
 
   $("cancelLyricsEdit")?.addEventListener("click", () => {
-    $("lyricsEditor")?.classList.remove("active");
+    const editor = $("lyricsEditor");
+    if (editor) {
+      editor.classList.remove("active");
+      editor.hidden = true;
+    }
     state.editingLyrics = false;
   });
 
