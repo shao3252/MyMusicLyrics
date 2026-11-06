@@ -1909,3 +1909,92 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .more-menu-item:hover, .more-menu-item:focus-visible {
     background: rgba(184,139,255,.18);
 }
+
+
+/* LYRICS PREVIEW THEMES */
+.lyrics-tools {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 14px 0 18px;
+    padding: 14px;
+    border: 1px solid rgba(190,160,255,.18);
+    border-radius: 18px;
+    background: linear-gradient(145deg, rgba(30,24,43,.96), rgba(15,13,24,.96));
+}
+.lyrics-tool-field {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+}
+.lyrics-tool-field span {
+    color: #D9CDEB;
+    font-size: 12px;
+    font-weight: 700;
+}
+.lyrics-tool-field .settings-input {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+}
+.lyrics-tools > button,
+.lyrics-tools > p {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+.lyrics-export-note {
+    color: #B8B1C7;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.lyrics-display[data-theme="neon"] {
+    background: radial-gradient(ellipse at 50% 45%, rgba(133,77,205,.22), transparent 68%), #100B1D;
+    border: 1px solid rgba(193,145,255,.2);
+    border-radius: 20px;
+}
+.lyrics-display[data-theme="neon"] .lyric-line.active {
+    color: #FFFFFF;
+    text-shadow: 0 0 18px rgba(190,132,255,.8);
+}
+.lyrics-display[data-theme="minimal"] {
+    background: #10151D;
+    border: 1px solid rgba(220,230,245,.15);
+    border-radius: 20px;
+}
+.lyrics-display[data-theme="minimal"] .lyric-line { color: #9CA9B8; }
+.lyrics-display[data-theme="minimal"] .lyric-line.active {
+    color: #FFFFFF;
+    text-shadow: none;
+}
+.lyrics-display[data-theme="sunset"] {
+    background: linear-gradient(155deg, #24101F, #57253A 58%, #211226);
+    border: 1px solid rgba(255,174,130,.22);
+    border-radius: 20px;
+}
+.lyrics-display[data-theme="sunset"] .lyric-line.active {
+    color: #FFF1E6;
+    text-shadow: 0 0 20px rgba(255,153,111,.65);
+}
+.lyrics-display[data-theme="ocean"] {
+    background: linear-gradient(155deg, #061B29, #0B3A50 58%, #071521);
+    border: 1px solid rgba(101,228,255,.22);
+    border-radius: 20px;
+}
+.lyrics-display[data-theme="ocean"] .lyric-line.active {
+    color: #F1FDFF;
+    text-shadow: 0 0 20px rgba(80,218,255,.6);
+}
+.lyrics-display[data-theme="karaoke"] {
+    background: radial-gradient(ellipse at 50% 50%, rgba(92,68,20,.25), transparent 70%), #11101B;
+    border: 1px solid rgba(255,230,109,.24);
+    border-radius: 20px;
+}
+.lyrics-display[data-theme="karaoke"] .lyric-line.active,
+.lyrics-display[data-theme="karaoke"] .lyric-word.active {
+    color: #FFE66D;
+    text-shadow: 0 0 16px rgba(255,230,109,.55);
+}
+@media (max-width: 420px) {
+    .lyrics-tools { padding: 11px; gap: 10px; }
+    .lyrics-tool-field span { font-size: 11px; }
+}
