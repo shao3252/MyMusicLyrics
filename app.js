@@ -1013,6 +1013,65 @@ function setupLyricsImport() {
 }
 
 
+// Turn a flat word-timestamp transcript into readable lyric lines.
+function buildTimedLyricLines(segments) {
+  const allWords = (Array.isArray(segments) ? segments : [])
+    .flatMap(segment => Array.isArray(segment.words) ? segment.words : [])
+    .filter(word =>
+      Number.isFinite(Number(word.start)) &&
+      Number.isFinite(Number(word.end)) &&
+      Number(word.end) >= Number(word.start) &&
+      String(word.text || "").trim()
+    )
+    .map(word => ({
+      start: Number(word.start),
+      end: Number(word.end),
+      text: String(word.text).trim()
+    }))
+    .sort((a, b) => a.start - b.start);
+
+  if (allWords.length === 0) {
+    return (Array.isArray(segments) ? segments : []).map(segment => ({
+      time: segment.time,
+      end: segment.end,
+      text: segment.text,
+      words: Array.isArray(segment.words) ? segment.words : []
+    }));
+  }
+
+  const lines = [];
+  let group = [];
+
+  const finishGroup = () => {
+    if (!group.length) return;
+    lines.push({
+      time: group[0].start,
+      end: group[group.length - 1].end,
+      text: group.map(word => word.text).join(" "),
+      words: group
+    });
+    group = [];
+  };
+
+  for (const word of allWords) {
+    const previous = group[group.length - 1];
+    const pause = previous ? word.start - previous.end : 0;
+    const endsPhrase = /[.!?,;:]$/.test(word.text);
+
+    if (group.length && (pause > 0.65 || group.length >= 7)) {
+      finishGroup();
+    }
+
+    group.push(word);
+
+    if (endsPhrase) finishGroup();
+  }
+
+  finishGroup();
+  return lines;
+}
+
+
 // --------------------------------------------------
 // AUTOMATIC TRANSCRIPTION
 // --------------------------------------------------
@@ -1059,11 +1118,13 @@ async function runTranscription() {
       }
     );
 
-    state.currentLyrics = result.lyrics;
+    // Convert word-level timings into short, individually synchronized lyric lines.
+    const timedLines = buildTimedLyricLines(result.lyrics);
+    state.currentLyrics = normalizeLyrics(timedLines);
     state.currentLyricsSource = "ai-transcription";
 
     await saveLyrics(song.id, {
-      lines: result.lyrics,
+      lines: state.currentLyrics,
       source: "ai-transcription",
       language: result.language,
       model: result.model,
