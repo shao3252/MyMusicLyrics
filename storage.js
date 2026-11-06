@@ -6,7 +6,7 @@
 ========================================= */
 
 const DB_NAME = "MyMusicLyricsDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let database = null;
 
@@ -34,20 +34,21 @@ export function initializeStorage() {
 
             const db = event.target.result;
 
+            // Upgrade safely: add missing stores/indexes without deleting saved data.
+            let songs;
+
             if (!db.objectStoreNames.contains("songs")) {
+                songs = db.createObjectStore("songs", { keyPath: "id" });
+            } else {
+                songs = event.target.transaction.objectStore("songs");
+            }
 
-                const songs = db.createObjectStore(
-                    "songs",
-                    { keyPath: "id" }
-                );
+            if (!songs.indexNames.contains("title")) {
+                songs.createIndex("title", "title", { unique: false });
+            }
 
-                songs.createIndex("title", "title", {
-                    unique: false
-                });
-
-                songs.createIndex("artist", "artist", {
-                    unique: false
-                });
+            if (!songs.indexNames.contains("artist")) {
+                songs.createIndex("artist", "artist", { unique: false });
             }
 
             if (!db.objectStoreNames.contains("playlists")) {
