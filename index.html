@@ -339,6 +339,37 @@
                 No lyrics loaded
             </div>
 
+            <div class="lyrics-tools">
+                <label class="lyrics-tool-field">
+                    <span>Preview theme</span>
+                    <select id="lyricsThemeSelect" class="settings-input">
+                        <option value="neon">Neon Glow</option>
+                        <option value="minimal">Clean Minimal</option>
+                        <option value="sunset">Sunset</option>
+                        <option value="ocean">Ocean Blue</option>
+                        <option value="karaoke">Karaoke Highlight</option>
+                    </select>
+                </label>
+                <label class="lyrics-tool-field">
+                    <span>Video length</span>
+                    <select id="lyricsVideoDuration" class="settings-input">
+                        <option value="15">15 seconds</option>
+                        <option value="30" selected>30 seconds</option>
+                        <option value="60">60 seconds</option>
+                        <option value="full">Full song</option>
+                    </select>
+                </label>
+                <button class="primary-button full-button" id="exportLyricsVideo">
+                    ⇩ Create Lyrics Video
+                </button>
+                <button class="secondary-button full-button" id="stopLyricsVideo" hidden>
+                    Stop recording
+                </button>
+                <p class="lyrics-export-note" id="lyricsExportStatus">
+                    Preview themes also change the exported video. Video exports as WebM where supported.
+                </p>
+            </div>
+
             <div class="lyrics-display" id="lyricsDisplay">
 
                 <div class="lyrics-placeholder">
