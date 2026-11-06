@@ -463,7 +463,7 @@ async function playSong(song) {
 
     audioEngine.setPlaylist(playlist, Math.max(0, index));
 
-    await audioEngine.loadSong(song, true);
+    await audioEngine.loadSong(Math.max(0, index), true);
 
     state.currentSong = song;
 
