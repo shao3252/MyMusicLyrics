@@ -239,6 +239,10 @@ function setupMoreMenus() {
       }
     },
     {
+      label: "Edit music details",
+      run: () => $("editSongDetailsButton")?.click()
+    },
+    {
       label: "Song information",
       run: () => {
         const song = state.currentSong;
@@ -652,6 +656,65 @@ async function playSong(song) {
 }
 
 
+function setupSongDetailsEditor() {
+  const form = $("songDetailsEditor");
+  const openButton = $("editSongDetailsButton");
+  const cancelButton = $("cancelSongDetails");
+
+  openButton?.addEventListener("click", () => {
+    const song = state.currentSong || audioEngine.getCurrentSong();
+    if (!song) {
+      showToast("Select a song first.");
+      return;
+    }
+    $("editSongTitle").value = song.title || "";
+    $("editSongArtist").value = song.artist || "";
+    $("editSongAlbum").value = song.album || "";
+    form.hidden = false;
+  });
+
+  cancelButton?.addEventListener("click", () => {
+    form.hidden = true;
+  });
+
+  form?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const song = state.currentSong || audioEngine.getCurrentSong();
+    if (!song) {
+      showToast("Select a song first.");
+      return;
+    }
+    const title = $("editSongTitle").value.trim();
+    if (!title) {
+      showToast("Song title cannot be empty.");
+      return;
+    }
+    const updatedSong = {
+      ...song,
+      title,
+      artist: $("editSongArtist").value.trim() || "Unknown Artist",
+      album: $("editSongAlbum").value.trim() || "Unknown Album"
+    };
+    try {
+      await saveSong(updatedSong);
+      const index = state.songs.findIndex(item => item.id === song.id);
+      if (index >= 0) state.songs[index] = updatedSong;
+      state.currentSong = updatedSong;
+      audioEngine.currentSong = updatedSong;
+      audioEngine.updateMediaMetadata?.(updatedSong);
+      renderPlayer();
+      renderSongs($("songSearch")?.value || "");
+      renderHome();
+      form.hidden = true;
+      showToast("Music details saved.");
+    } catch (error) {
+      console.error("Could not update music details:", error);
+      showToast("Could not save music details.");
+    }
+  });
+}
+
+
 function renderPlayer() {
   const song = state.currentSong || audioEngine.getCurrentSong();
 
@@ -819,22 +882,25 @@ let lyricsExportFrame = null;
 let lyricsExportDestination = null;
 let lyricsExportCanvasStream = null;
 let lyricsExportEndHandler = null;
+let lyricsExportDownloadUrl = null;
 
 
 function setupSpectrum() {
-  const bars = $("spectrumBars");
+  const barContainers = [$("spectrumBars"), $("lyricsSpectrumBars")].filter(Boolean);
   const audio = audioEngine.audio;
-  if (!bars || !audio) return;
+  if (!barContainers.length || !audio) return;
 
-  if (!bars.children.length) {
-    const fragment = document.createDocumentFragment();
-    for (let i = 0; i < 36; i++) {
-      const bar = document.createElement("span");
-      bar.className = "spectrum-bar";
-      fragment.appendChild(bar);
+  barContainers.forEach(bars => {
+    if (!bars.children.length) {
+      const fragment = document.createDocumentFragment();
+      for (let i = 0; i < 36; i++) {
+        const bar = document.createElement("span");
+        bar.className = "spectrum-bar";
+        fragment.appendChild(bar);
+      }
+      bars.appendChild(fragment);
     }
-    bars.appendChild(fragment);
-  }
+  });
 
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) {
@@ -857,13 +923,16 @@ function setupSpectrum() {
     const draw = () => {
       spectrumFrame = requestAnimationFrame(draw);
       spectrumAnalyser.getByteFrequencyData(data);
-      const children = bars.children;
-      for (let i = 0; i < children.length; i++) {
-        const value = data[Math.floor(i * data.length / children.length)] || 0;
-        children[i].style.height = Math.max(4, (value / 255) * 100) + "%";
-      }
-      if ($("spectrumStatus")) $("spectrumStatus").textContent =
-        audioEngine.isPlaying() ? "ANALYZING" : "PAUSED";
+      barContainers.forEach(bars => {
+        const children = bars.children;
+        for (let i = 0; i < children.length; i++) {
+          const value = data[Math.floor(i * data.length / children.length)] || 0;
+          children[i].style.height = Math.max(4, (value / 255) * 100) + "%";
+        }
+      });
+      const label = audioEngine.isPlaying() ? "ANALYZING" : "PAUSED";
+      if ($("spectrumStatus")) $("spectrumStatus").textContent = label;
+      if ($("lyricsSpectrumStatus")) $("lyricsSpectrumStatus").textContent = label;
     };
     if (spectrumContext.state === "suspended") spectrumContext.resume();
     if (spectrumFrame) cancelAnimationFrame(spectrumFrame);
@@ -1322,7 +1391,13 @@ const LYRICS_VIDEO_THEMES = {
   minimal: { background: ["#080B12", "#18202C", "#080B12"], accent: "#FFFFFF", text: "#FFFFFF", muted: "#AAB4C2" },
   sunset: { background: ["#210D20", "#6B2440", "#160D24"], accent: "#FFB17B", text: "#FFF4EA", muted: "#E5B7B0" },
   ocean: { background: ["#041521", "#073B55", "#06101F"], accent: "#65E4FF", text: "#F0FCFF", muted: "#A5D4E1" },
-  karaoke: { background: ["#090914", "#19132D", "#080811"], accent: "#FFE66D", text: "#FFFFFF", muted: "#BDB8D0" }
+  karaoke: { background: ["#090914", "#19132D", "#080811"], accent: "#FFE66D", text: "#FFFFFF", muted: "#BDB8D0" },
+  rose: { background: ["#1D0B18", "#71334F", "#160B19"], accent: "#FFB6D5", text: "#FFF5FA", muted: "#E6B7CB" },
+  forest: { background: ["#061B16", "#14513E", "#07130F"], accent: "#76F0B5", text: "#F1FFF8", muted: "#A8D9C1" },
+  midnight: { background: ["#030407", "#171923", "#050609"], accent: "#A9B8FF", text: "#F7F8FF", muted: "#AEB3C7" },
+  vintage: { background: ["#211A12", "#65503A", "#17120D"], accent: "#E7C58B", text: "#FFF4DE", muted: "#D0B995" },
+  lavender: { background: ["#171027", "#46346D", "#100D1B"], accent: "#D8C1FF", text: "#FFF9FF", muted: "#C3B3DC" },
+  fire: { background: ["#210905", "#78220E", "#170705"], accent: "#FF9A45", text: "#FFF8F0", muted: "#E8B29A" }
 };
 
 function applyLyricsTheme(theme) {
@@ -1336,6 +1411,7 @@ function applyLyricsTheme(theme) {
 
 function setupLyricsPresentation() {
   const themeSelect = $("lyricsThemeSelect");
+  setupSpectrum();
   if (themeSelect) {
     themeSelect.addEventListener("change", async () => {
       const theme = applyLyricsTheme(themeSelect.value);
@@ -1500,7 +1576,7 @@ async function exportLyricsVideo() {
     return;
   }
   if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
-    showToast("Video recording is not supported in this browser. Try Chrome.");
+    showToast("Video export is not supported in this browser. Try Chrome.");
     return;
   }
   if (lyricsExportRecorder && lyricsExportRecorder.state !== "inactive") {
@@ -1511,6 +1587,12 @@ async function exportLyricsVideo() {
   const button = $("exportLyricsVideo");
   const status = $("lyricsExportStatus");
   const stopButton = $("stopLyricsVideo");
+  const downloadLink = $("downloadLyricsVideo");
+  if (downloadLink) downloadLink.hidden = true;
+  if (lyricsExportDownloadUrl) {
+    URL.revokeObjectURL(lyricsExportDownloadUrl);
+    lyricsExportDownloadUrl = null;
+  }
   const themeName = applyLyricsTheme($("lyricsThemeSelect")?.value || "neon");
   const durationChoice = $("lyricsVideoDuration")?.value || "30";
   const clipDuration = durationChoice === "full" ? 0 : Math.max(5, Number(durationChoice) || 30);
@@ -1581,19 +1663,20 @@ async function exportLyricsVideo() {
       }
       if (status) status.textContent = "Preparing your video...";
       if (blob.size) {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
+        if (lyricsExportDownloadUrl) URL.revokeObjectURL(lyricsExportDownloadUrl);
+        lyricsExportDownloadUrl = URL.createObjectURL(blob);
         const safeName = (getSongTitle(song) || "music").replace(/[^a-z0-9-_]+/gi, "-").replace(/^-|-$/g, "");
-        link.href = url;
-        link.download = "My-Music-Lyrics-" + (safeName || "video") + ".webm";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-        if (status) status.textContent = "Video created. Check your Downloads folder.";
-        showToast("Lyrics video created.");
+        const downloadLink = $("downloadLyricsVideo");
+        if (downloadLink) {
+          downloadLink.href = lyricsExportDownloadUrl;
+          downloadLink.download = "My-Music-Lyrics-" + (safeName || "video") + ".webm";
+          downloadLink.hidden = false;
+          downloadLink.textContent = "⇩ Download Video";
+        }
+        if (status) status.textContent = "Your video is ready. Tap Download Video to save it.";
+        showToast("Video is ready to download.");
       } else {
-        if (status) status.textContent = "No video data was recorded. Please try again.";
+        if (status) status.textContent = "No video data was created. Please try again.";
       }
     });
 
@@ -1604,13 +1687,13 @@ async function exportLyricsVideo() {
     }
     if (button) {
       button.disabled = true;
-      button.textContent = "Recording video...";
+      button.textContent = "Creating video...";
     }
     if (stopButton) stopButton.hidden = false;
     if (status) {
       status.textContent = clipDuration
-        ? "Recording a " + clipDuration + "-second video with audio..."
-        : "Recording until the song ends...";
+        ? "Creating a " + clipDuration + "-second video with the song audio..."
+        : "Creating the full-song video...";
     }
 
     if (clipDuration) {
@@ -2250,6 +2333,7 @@ async function initializeApp() {
     setupMusicImport();
     setupSongSearch();
     setupPlayerControls();
+    setupSongDetailsEditor();
     setupAudioEvents();
     setupLyricsImport();
     setupLyricsPresentation();
