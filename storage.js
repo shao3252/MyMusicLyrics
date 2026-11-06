@@ -23,7 +23,6 @@ class MusicStorage {
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
         
-        // Songs store
         if (!db.objectStoreNames.contains('songs')) {
           const songStore = db.createObjectStore('songs', { keyPath: 'id', autoIncrement: true });
           songStore.createIndex('title', 'title', { unique: false });
@@ -31,27 +30,20 @@ class MusicStorage {
           songStore.createIndex('lastPlayed', 'lastPlayed', { unique: false });
         }
         
-        // Playlists store
         if (!db.objectStoreNames.contains('playlists')) {
-          const playlistStore = db.createObjectStore('playlists', { keyPath: 'id', autoIncrement: true });
-          playlistStore.createIndex('name', 'name', { unique: false });
+          db.createObjectStore('playlists', { keyPath: 'id', autoIncrement: true });
         }
         
-        // Lyrics store (transcripts + LRC)
         if (!db.objectStoreNames.contains('lyrics')) {
-          const lyricsStore = db.createObjectStore('lyrics', { keyPath: 'songId' });
-          lyricsStore.createIndex('updated', 'updated', { unique: false });
+          db.createObjectStore('lyrics', { keyPath: 'songId' });
         }
         
-        // Settings store
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'key' });
         }
         
-        // Recent plays
         if (!db.objectStoreNames.contains('recent')) {
-          const recentStore = db.createObjectStore('recent', { keyPath: 'id', autoIncrement: true });
-          recentStore.createIndex('timestamp', 'timestamp', { unique: false });
+          db.createObjectStore('recent', { keyPath: 'id', autoIncrement: true });
         }
       };
     });
@@ -113,11 +105,7 @@ class MusicStorage {
   async saveLyrics(songId, lyricsData) {
     const tx = this.db.transaction(['lyrics'], 'readwrite');
     const store = tx.objectStore('lyrics');
-    const data = {
-      songId,
-      ...lyricsData,
-      updated: Date.now()
-    };
+    const data = { songId, ...lyricsData, updated: Date.now() };
     const request = store.put(data);
     return new Promise((resolve, reject) => {
       request.onsuccess = () => resolve(request.result);
@@ -198,17 +186,6 @@ class MusicStorage {
       request.onerror = () => reject(request.error);
     });
   }
-
-  async clearRecent() {
-    const tx = this.db.transaction(['recent'], 'readwrite');
-    const store = tx.objectStore('recent');
-    const request = store.clear();
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
 }
 
-// Singleton instance
 const storage = new MusicStorage();

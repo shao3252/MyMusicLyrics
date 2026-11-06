@@ -10,20 +10,13 @@ class LyricsEngine {
     this.container = null;
     this.isEditMode = false;
     this.audioElement = null;
-    
     this.init();
   }
 
   init() {
-    // Get audio element reference
     this.audioElement = audioEngine.audio;
-    
-    // Update on time change
-    this.audioElement.addEventListener('timeupdate', () => {
-      this.update();
-    });
+    this.audioElement.addEventListener('timeupdate', () => this.update());
 
-    // Load lyrics when song changes
     document.addEventListener('songchange', async (e) => {
       await this.loadLyricsForSong(e.detail);
     });
@@ -31,16 +24,12 @@ class LyricsEngine {
 
   async loadLyricsForSong(song) {
     if (!song) return;
-
     try {
-      // Try to load saved lyrics from IndexedDB
       const saved = await storage.getLyrics(song.id);
-      
       if (saved) {
         this.currentLyrics = saved;
         this.display();
       } else {
-        // No lyrics found - show placeholder
         this.showNoLyrics();
       }
     } catch (error) {
@@ -50,27 +39,17 @@ class LyricsEngine {
   }
 
   async generateLyrics(song, method = 'auto') {
-    if (!song || !song.file) {
-      throw new Error('No audio file available for transcription');
-    }
+    if (!song || !song.file) throw new Error('No audio file available');
 
     try {
       let result;
-
       if (method === 'lrc' && song.lrcContent) {
-        // Parse provided LRC
         result = transcriptionEngine.parseLRC(song.lrcContent);
       } else {
-        // Transcribe
         showTranscriptionProgress('Starting transcription...');
-        
-        result = await transcriptionEngine.transcribe(song.file, {
-          language: 'auto',
-          modelSize: 'tiny'
-        });
+        result = await transcriptionEngine.transcribe(song.file, { language: 'auto', modelSize: 'tiny' });
       }
 
-      // Save to storage
       await storage.saveLyrics(song.id, {
         lines: result.lines,
         words: result.words,
@@ -81,7 +60,6 @@ class LyricsEngine {
 
       this.currentLyrics = result;
       this.display();
-      
       hideTranscriptionProgress();
       return result;
     } catch (error) {
@@ -105,23 +83,16 @@ class LyricsEngine {
       const lineEl = document.createElement('div');
       lineEl.className = 'lyric-line';
       lineEl.dataset.index = index;
-      lineEl.dataset.start = line.start;
-      lineEl.dataset.end = line.end;
       
       const textEl = document.createElement('span');
       textEl.className = 'lyric-text';
       textEl.textContent = line.text;
-      
       lineEl.appendChild(textEl);
       
-      // Click to seek
       lineEl.addEventListener('click', () => {
-        if (!this.isEditMode) {
-          audioEngine.seek(line.start + 0.1);
-        }
+        if (!this.isEditMode) audioEngine.seek(line.start + 0.1);
       });
       
-      // Edit mode
       if (this.isEditMode) {
         textEl.contentEditable = true;
         textEl.addEventListener('blur', async () => {
@@ -134,35 +105,27 @@ class LyricsEngine {
   }
 
   update() {
-    if (!this.currentLyrics || !this.currentLyrics.lines || this.currentLyrics.lines.length === 0) {
-      return;
-    }
+    if (!this.currentLyrics || !this.currentLyrics.lines) return;
 
     const currentTime = this.audioElement.currentTime;
     const lines = this.currentLyrics.lines;
-    
-    // Find current line
     let newIndex = -1;
+
     for (let i = 0; i < lines.length; i++) {
       if (currentTime >= lines[i].start && currentTime < lines[i].end) {
         newIndex = i;
         break;
       }
-      if (currentTime < lines[i].start) {
-        break;
-      }
-      newIndex = i; // Keep last line if past end
+      if (currentTime < lines[i].start) break;
+      newIndex = i;
     }
 
-    // Update display if line changed
     if (newIndex !== this.currentLineIndex) {
-      // Remove old active class
       if (this.currentLineIndex >= 0) {
         const oldEl = this.container.querySelector(`[data-index="${this.currentLineIndex}"]`);
         if (oldEl) oldEl.classList.remove('active');
       }
 
-      // Add new active class
       if (newIndex >= 0) {
         const newEl = this.container.querySelector(`[data-index="${newIndex}"]`);
         if (newEl) {
@@ -170,54 +133,23 @@ class LyricsEngine {
           this.scrollToLine(newEl);
         }
       }
-
       this.currentLineIndex = newIndex;
     }
   }
 
   scrollToLine(lineEl) {
     if (!lineEl || !this.container) return;
-
     const containerRect = this.container.getBoundingClientRect();
     const lineRect = lineEl.getBoundingClientRect();
-    
     const scrollTop = this.container.scrollTop + (lineRect.top - containerRect.top) - (containerRect.height / 2) + (lineRect.height / 2);
-    
-    this.container.scrollTo({
-      top: scrollTop,
-      behavior: 'smooth'
-    });
+    this.container.scrollTo({ top: scrollTop, behavior: 'smooth' });
   }
 
   async updateLineText(index, newText) {
     if (!this.currentLyrics || !this.currentLyrics.lines[index]) return;
-
     this.currentLyrics.lines[index].text = newText;
-    
-    // Save to storage
     const song = audioEngine.currentSong;
-    if (song) {
-      await storage.saveLyrics(song.id, this.currentLyrics);
-    }
-  }
-
-  async adjustLineTime(index, newStart) {
-    if (!this.currentLyrics || !this.currentLyrics.lines[index]) return;
-
-    this.currentLyrics.lines[index].start = newStart;
-    
-    // Update end time of previous line
-    if (index > 0) {
-      this.currentLyrics.lines[index - 1].end = newStart;
-    }
-
-    // Save
-    const song = audioEngine.currentSong;
-    if (song) {
-      await storage.saveLyrics(song.id, this.currentLyrics);
-    }
-
-    this.display();
+    if (song) await storage.saveLyrics(song.id, this.currentLyrics);
   }
 
   toggleEditMode() {
@@ -228,40 +160,24 @@ class LyricsEngine {
 
   showNoLyrics() {
     if (!this.container) return;
-    
     this.container.innerHTML = `
       <div class="no-lyrics">
         <div class="no-lyrics-icon">🎵</div>
         <p>No lyrics available for this song</p>
         <button class="btn-primary" onclick="generateLyrics()">Generate Lyrics</button>
-        <button class="btn-secondary" onclick="importLRC()">Import LRC File</button>
+        <button class="btn-secondary" onclick="importLRC()" style="margin-top:10px;">Import LRC File</button>
       </div>
     `;
   }
 
   showError() {
     if (!this.container) return;
-    
-    this.container.innerHTML = `
-      <div class="error-message">
-        <p>Error loading lyrics</p>
-      </div>
-    `;
+    this.container.innerHTML = `<div class="error-message"><p>Error loading lyrics</p></div>`;
   }
 
-  setContainer(element) {
-    this.container = element;
-  }
-
-  getCurrentLine() {
-    if (this.currentLineIndex >= 0 && this.currentLyrics) {
-      return this.currentLyrics.lines[this.currentLineIndex];
-    }
-    return null;
-  }
+  setContainer(element) { this.container = element; }
 }
 
-// Helper functions for UI
 function showTranscriptionProgress(message) {
   const overlay = document.getElementById('transcription-overlay');
   const msgEl = document.getElementById('transcription-message');
@@ -273,15 +189,12 @@ function showTranscriptionProgress(message) {
 
 function hideTranscriptionProgress() {
   const overlay = document.getElementById('transcription-overlay');
-  if (overlay) {
-    overlay.style.display = 'none';
-  }
+  if (overlay) overlay.style.display = 'none';
 }
 
 async function generateLyrics() {
   const song = audioEngine.currentSong;
   if (!song) return;
-
   try {
     await lyricsEngine.generateLyrics(song, 'auto');
   } catch (error) {
@@ -296,7 +209,6 @@ function importLRC() {
   input.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     const text = await file.text();
     const song = audioEngine.currentSong;
     if (song) {
@@ -307,5 +219,4 @@ function importLRC() {
   input.click();
 }
 
-// Singleton
 const lyricsEngine = new LyricsEngine();

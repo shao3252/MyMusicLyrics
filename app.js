@@ -14,28 +14,21 @@ class MusicApp {
   }
 
   async init() {
-    // Initialize storage
     await storage.init();
-    
-    // Initialize audio engine
     this.audio = audioEngine;
     
-    // Setup UI
     this.setupNavigation();
     this.setupFileInput();
     this.setupPlaybackControls();
     this.setupSearch();
     this.setupPlaylistManagement();
     
-    // Load data
     await this.loadSongs();
     await this.loadPlaylists();
     await this.loadRecent();
     
-    // Setup lyrics container
     lyricsEngine.setContainer(document.getElementById('lyrics-container'));
     
-    // Setup transcription progress callback
     transcriptionEngine.setProgressCallback((progress) => {
       const msgEl = document.getElementById('transcription-message');
       if (msgEl) {
@@ -43,10 +36,7 @@ class MusicApp {
       }
     });
     
-    // Register service worker
     this.registerServiceWorker();
-    
-    // Handle PWA install
     this.setupPWAInstall();
   }
 
@@ -59,7 +49,6 @@ class MusicApp {
       });
     });
 
-    // Handle back button
     window.addEventListener('popstate', (e) => {
       if (e.state && e.state.screen) {
         this.navigateTo(e.state.screen, false);
@@ -68,18 +57,15 @@ class MusicApp {
   }
 
   navigateTo(screen, pushState = true) {
-    // Hide all screens
     document.querySelectorAll('.screen').forEach(s => {
       s.classList.remove('active');
     });
     
-    // Show target screen
     const targetScreen = document.getElementById(`screen-${screen}`);
     if (targetScreen) {
       targetScreen.classList.add('active');
       this.currentScreen = screen;
       
-      // Update nav
       document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.screen === screen);
       });
@@ -88,9 +74,9 @@ class MusicApp {
         history.pushState({ screen }, '', `#${screen}`);
       }
       
-      // Screen-specific setup
       if (screen === 'now-playing') {
         this.updateNowPlayingDisplay();
+        this.audio.initVisualizer('audio-visualizer');
       } else if (screen === 'lyrics') {
         lyricsEngine.display();
       }
@@ -101,16 +87,13 @@ class MusicApp {
     const fileInput = document.getElementById('file-input');
     const addButton = document.getElementById('add-music-btn');
     
-    addButton.addEventListener('click', () => {
-      fileInput.click();
-    });
+    addButton.addEventListener('click', () => fileInput.click());
 
     fileInput.addEventListener('change', async (e) => {
       const files = Array.from(e.target.files);
       await this.importFiles(files);
     });
 
-    // Drag and drop support
     const dropZone = document.getElementById('drop-zone');
     if (dropZone) {
       dropZone.addEventListener('dragover', (e) => {
@@ -133,20 +116,17 @@ class MusicApp {
 
   async importFiles(files) {
     const audioFiles = files.filter(f => 
-      f.type.startsWith('audio/') || 
-      /\.(mp3|wav|m4a|ogg|flac|aac)$/i.test(f.name)
+      f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|flac|aac)$/i.test(f.name)
     );
 
     if (audioFiles.length === 0) {
-      alert('No audio files selected');
+      alert('No valid audio files selected');
       return;
     }
 
     for (const file of audioFiles) {
       try {
-        // Extract metadata
         const metadata = await this.extractMetadata(file);
-        
         const song = {
           title: metadata.title || file.name.replace(/\.[^/.]+$/, ''),
           artist: metadata.artist || 'Unknown Artist',
@@ -166,7 +146,7 @@ class MusicApp {
     }
 
     await this.refreshSongList();
-    alert(`Imported ${audioFiles.length} songs`);
+    alert(`Successfully imported ${audioFiles.length} song(s)`);
   }
 
   async extractMetadata(file) {
@@ -175,12 +155,7 @@ class MusicApp {
       const url = URL.createObjectURL(file);
       
       audio.addEventListener('loadedmetadata', () => {
-        resolve({
-          duration: audio.duration,
-          title: null,
-          artist: null,
-          album: null
-        });
+        resolve({ duration: audio.duration, title: null, artist: null, album: null });
         URL.revokeObjectURL(url);
       });
 
@@ -188,8 +163,8 @@ class MusicApp {
         resolve({
           duration: 0,
           title: file.name.replace(/\.[^/.]+$/, ''),
-          artist: 'Unknown',
-          album: 'Unknown'
+          artist: 'Unknown Artist',
+          album: 'Unknown Album'
         });
         URL.revokeObjectURL(url);
       });
@@ -213,7 +188,7 @@ class MusicApp {
       container.innerHTML = `
         <div class="empty-state">
           <p>No music yet. Add your first song!</p>
-          <button class="btn-primary" onclick="document.getElementById('file-input').click()">
+          <button class="btn-primary" onclick="document.getElementById('file-input').click()" style="margin-top: 16px;">
             Add Music
           </button>
         </div>
@@ -239,17 +214,15 @@ class MusicApp {
         <div class="song-artist">${this.escapeHtml(song.artist)}</div>
       </div>
       <div class="song-duration">${this.audio.formatTime(song.duration)}</div>
-      <button class="song-menu-btn" data-index="${index}">⋮</button>
+      <button class="song-menu-btn" data-index="${index}" title="Options">⋮</button>
     `;
 
-    // Play on click
     div.addEventListener('click', (e) => {
       if (!e.target.classList.contains('song-menu-btn')) {
         this.playSong(index);
       }
     });
 
-    // Context menu
     const menuBtn = div.querySelector('.song-menu-btn');
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -269,22 +242,12 @@ class MusicApp {
   }
 
   setupPlaybackControls() {
-    // Play/Pause
     const playBtn = document.getElementById('play-btn');
-    playBtn.addEventListener('click', () => {
-      this.audio.toggle();
-    });
+    playBtn.addEventListener('click', () => this.audio.toggle());
 
-    // Previous/Next
-    document.getElementById('prev-btn').addEventListener('click', () => {
-      this.audio.previous();
-    });
+    document.getElementById('prev-btn').addEventListener('click', () => this.audio.previous());
+    document.getElementById('next-btn').addEventListener('click', () => this.audio.next());
 
-    document.getElementById('next-btn').addEventListener('click', () => {
-      this.audio.next();
-    });
-
-    // Seek bar
     const seekBar = document.getElementById('seek-bar');
     seekBar.addEventListener('input', (e) => {
       const percent = e.target.value / 100;
@@ -292,26 +255,22 @@ class MusicApp {
       this.audio.seek(time);
     });
 
-    // Volume
     const volumeSlider = document.getElementById('volume-slider');
     volumeSlider.addEventListener('input', (e) => {
       this.audio.setVolume(e.target.value / 100);
     });
 
-    // Shuffle
     document.getElementById('shuffle-btn').addEventListener('click', (e) => {
       const isShuffled = this.audio.toggleShuffle();
       e.currentTarget.classList.toggle('active', isShuffled);
     });
 
-    // Repeat
     document.getElementById('repeat-btn').addEventListener('click', (e) => {
       const mode = this.audio.cycleRepeat();
       e.currentTarget.classList.toggle('active', mode !== 'none');
       e.currentTarget.dataset.mode = mode;
     });
 
-    // Update seek bar
     this.audio.audio.addEventListener('timeupdate', () => {
       const current = this.audio.getCurrentTime();
       const duration = this.audio.getDuration();
@@ -322,14 +281,12 @@ class MusicApp {
       document.getElementById('total-time').textContent = this.audio.formatTime(duration);
     });
 
-    // Update play button icon
     document.addEventListener('playbackstate', (e) => {
       const icon = playBtn.querySelector('span');
       icon.textContent = e.detail.isPlaying ? '⏸' : '▶';
     });
 
-    // Update now playing when song changes
-    document.addEventListener('songchange', (e) => {
+    document.addEventListener('songchange', () => {
       this.updateNowPlayingDisplay();
     });
   }
@@ -348,7 +305,6 @@ class MusicApp {
       artwork.innerHTML = '<span class="music-icon large">🎵</span>';
     }
 
-    // Update mini player
     document.getElementById('mini-player-title').textContent = song.title;
     document.getElementById('mini-player-artist').textContent = song.artist;
   }
@@ -400,30 +356,22 @@ class MusicApp {
       div.className = 'playlist-item';
       div.innerHTML = `
         <div class="playlist-icon">📋</div>
-        <div class="playlist-info">
+        <div class="song-info">
           <div class="playlist-name">${this.escapeHtml(playlist.name)}</div>
           <div class="playlist-count">${playlist.songs ? playlist.songs.length : 0} songs</div>
         </div>
       `;
       
-      div.addEventListener('click', () => {
-        this.openPlaylist(playlist);
-      });
-      
+      div.addEventListener('click', () => alert(`Playlist: ${playlist.name}`));
       container.appendChild(div);
     });
   }
 
   showCreatePlaylistDialog() {
-    const name = prompt('Playlist name:');
+    const name = prompt('Enter playlist name:');
     if (!name) return;
 
-    const playlist = {
-      name,
-      songs: [],
-      created: Date.now()
-    };
-
+    const playlist = { name, songs: [], created: Date.now() };
     storage.savePlaylist(playlist).then(id => {
       playlist.id = id;
       this.playlists.push(playlist);
@@ -462,23 +410,17 @@ class MusicApp {
   }
 
   showSongMenu(song, index) {
-    const options = ['Play', 'Add to Playlist', 'Edit Info', 'Delete'];
     const choice = prompt(`Options for "${song.title}":\n1. Play\n2. Add to Playlist\n3. Edit Info\n4. Delete\n\nEnter number:`);
     
-    if (choice === '1') {
-      this.playSong(index);
-    } else if (choice === '2') {
-      this.addToPlaylist(song);
-    } else if (choice === '3') {
-      this.editSongInfo(song);
-    } else if (choice === '4') {
-      this.deleteSong(song, index);
-    }
+    if (choice === '1') this.playSong(index);
+    else if (choice === '2') this.addToPlaylist(song);
+    else if (choice === '3') this.editSongInfo(song);
+    else if (choice === '4') this.deleteSong(song, index);
   }
 
   async addToPlaylist(song) {
     if (this.playlists.length === 0) {
-      alert('Create a playlist first');
+      alert('Create a playlist first!');
       return;
     }
 
@@ -510,7 +452,6 @@ class MusicApp {
 
   async deleteSong(song, index) {
     if (!confirm(`Delete "${song.title}"?`)) return;
-    
     await storage.deleteSong(song.id);
     this.songs.splice(index, 1);
     await this.refreshSongList();
@@ -518,20 +459,15 @@ class MusicApp {
 
   registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('SW registered'))
-        .catch(err => console.error('SW registration failed:', err));
+      navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW error:', err));
     }
   }
 
   setupPWAInstall() {
     let deferredPrompt;
-    
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      
-      // Show install button
       const installBtn = document.getElementById('install-btn');
       if (installBtn) {
         installBtn.style.display = 'block';
@@ -554,7 +490,6 @@ class MusicApp {
   }
 }
 
-// Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   window.musicApp = new MusicApp();
 });

@@ -49,6 +49,11 @@
             <div class="np-artwork" id="np-artwork">
                 <span class="music-icon large">🎵</span>
             </div>
+
+            <!-- Neon Audio Visualizer Canvas -->
+            <div class="visualizer-container">
+                <canvas id="audio-visualizer" width="300" height="70"></canvas>
+            </div>
             
             <div class="np-info">
                 <div class="np-title" id="np-title">No song playing</div>
@@ -186,10 +191,7 @@
         </div>
     </div>
 
-    <!-- Whisper WASM (optional - for local transcription) -->
     <script src="https://cdn.jsdelivr.net/npm/whisper.cpp@1.0.0/dist/whisper.min.js"></script>
-
-    <!-- App Scripts -->
     <script src="./storage.js"></script>
     <script src="./transcription.js"></script>
     <script src="./audio.js"></script>
@@ -206,7 +208,6 @@
             alert('Settings saved');
         }
 
-        // Load saved settings
         document.addEventListener('DOMContentLoaded', async () => {
             const endpoint = await storage.getSetting('apiEndpoint');
             const key = await storage.getSetting('apiKey');
