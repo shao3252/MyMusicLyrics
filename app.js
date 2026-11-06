@@ -850,24 +850,236 @@ function updateFavoriteButton() {
 // LYRICS
 // --------------------------------------------------
 
+let lyricsLookupRequestId = 0;
+
+function normalizeTrackText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/\\([^)]*\\)|\\[[^\\]]*\\]/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\\s+/g, " ");
+}
+
+function isUnknownArtist(value) {
+  const artist = normalizeTrackText(value);
+  return !artist || artist === "unknown artist" || artist === "unknown";
+}
+
+function lyricsRecordMatchesSong(record, song, duration) {
+  const wantedTitle = normalizeTrackText(song.title);
+  const foundTitle = normalizeTrackText(record.trackName || record.name);
+  if (!wantedTitle || foundTitle !== wantedTitle) return false;
+
+  if (!isUnknownArtist(song.artist)) {
+    const wantedArtist = normalizeTrackText(song.artist);
+    const foundArtist = normalizeTrackText(record.artistName);
+    if (!foundArtist || foundArtist !== wantedArtist) return false;
+  }
+
+  const recordDuration = Number(record.duration) || 0;
+  if (duration > 0 && recordDuration > 0 &&
+      Math.abs(duration - recordDuration) > 8) {
+    return false;
+  }
+
+  return true;
+}
+
+async function requestLrclib(url) {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Lrclib-Client": "MyMusicLyrics/1.0 (https://github.com/shao3252/MyMusicLyrics)",
+      "Accept": "application/json"
+    },
+    cache: "no-store"
+  });
+
+  if (response.status === 404) return null;
+
+  if (response.status === 429) {
+    const retryAfter = response.headers.get("Retry-After");
+    throw new Error(
+      "LRCLIB is busy. Please try again" +
+      (retryAfter ? " in " + retryAfter + " seconds." : " later.")
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error("Lyrics service returned HTTP " + response.status);
+  }
+
+  return response.json();
+}
+
+async function findAutomaticLyrics(song) {
+  const title = String(song.title || "").trim();
+  const artist = String(song.artist || "").trim();
+  const duration = Number(audioEngine.getDuration()) || 0;
+
+  if (!title || normalizeTrackText(title) === "unknown song") return null;
+
+  // Exact signature lookup is the safest match when artist metadata exists.
+  if (!isUnknownArtist(artist)) {
+    const params = new URLSearchParams({
+      track_name: title,
+      artist_name: artist
+    });
+
+    if (song.album && song.album !== "Unknown Album") {
+      params.set("album_name", song.album);
+    }
+    if (duration > 0 && duration <= 3600) {
+      params.set("duration", String(Math.round(duration)));
+    }
+
+    const exact = await requestLrclib(
+      "https://lrclib.net/api/get?" + params.toString()
+    );
+
+    if (exact && lyricsRecordMatchesSong(exact, song, duration)) {
+      return exact;
+    }
+  }
+
+  // Search by title when the artist is missing or exact matching fails.
+  const searchParams = new URLSearchParams({ track_name: title });
+  if (!isUnknownArtist(artist)) {
+    searchParams.set("artist_name", artist);
+  }
+
+  const results = await requestLrclib(
+    "https://lrclib.net/api/search?" + searchParams.toString()
+  );
+
+  if (!Array.isArray(results)) return null;
+
+  const matches = results.filter(record =>
+    lyricsRecordMatchesSong(record, song, duration) &&
+    (record.syncedLyrics || record.plainLyrics)
+  );
+
+  if (matches.length === 0) return null;
+
+  // Do not guess between different artists when the file has no artist tag.
+  if (isUnknownArtist(artist) && duration <= 0 && matches.length !== 1) {
+    return null;
+  }
+
+  matches.sort((a, b) => {
+    const aDiff = duration > 0 && Number(a.duration) > 0
+      ? Math.abs(duration - Number(a.duration)) : 0;
+    const bDiff = duration > 0 && Number(b.duration) > 0
+      ? Math.abs(duration - Number(b.duration)) : 0;
+    return aDiff - bDiff;
+  });
+
+  return matches[0];
+}
+
 async function loadCurrentSongLyrics() {
   const song = state.currentSong;
-
   if (!song) return;
+
+  const requestId = ++lyricsLookupRequestId;
 
   try {
     const saved = await getLyrics(song.id);
 
-    state.currentLyrics = normalizeLyrics(getLyricsArray(saved));
+    // Ignore a slow database response if the user has already changed songs.
+    if (requestId !== lyricsLookupRequestId || state.currentSong?.id !== song.id) {
+      return;
+    }
 
-    state.currentLyricsSource = saved?.source || "saved";
+    const savedLines = normalizeLyrics(getLyricsArray(saved));
+
+    if (savedLines.length > 0) {
+      state.currentLyrics = savedLines;
+      state.currentLyricsSource = saved?.source || "saved";
+      displayCurrentLyrics();
+      return;
+    }
+
+    state.currentLyrics = [];
+    state.currentLyricsSource = "searching";
+    displayCurrentLyrics();
+
+    if ($("lyricsStatus")) {
+      $("lyricsStatus").textContent = "Searching free lyrics...";
+    }
+
+    const record = await findAutomaticLyrics(song);
+
+    // Never attach a previous song's result to the newly selected song.
+    if (requestId !== lyricsLookupRequestId || state.currentSong?.id !== song.id) {
+      return;
+    }
+
+    if (!record || record.instrumental) {
+      state.currentLyrics = [];
+      state.currentLyricsSource = "none";
+      displayCurrentLyrics();
+      if ($("lyricsStatus")) {
+        $("lyricsStatus").textContent = "No matching lyrics found";
+      }
+      return;
+    }
+
+    let lines = [];
+    let source = "LRCLIB";
+
+    if (record.syncedLyrics) {
+      lines = parseLRC(record.syncedLyrics);
+    }
+    if (lines.length === 0 && record.plainLyrics) {
+      lines = parsePlainLyrics(record.plainLyrics);
+      source = "LRCLIB (untimed)";
+    }
+
+    if (lines.length === 0) {
+      state.currentLyrics = [];
+      state.currentLyricsSource = "none";
+      displayCurrentLyrics();
+      return;
+    }
+
+    state.currentLyrics = normalizeLyrics(lines);
+    state.currentLyricsSource = source;
+
+    await saveLyrics(song.id, {
+      lines: state.currentLyrics,
+      source: "LRCLIB",
+      updatedAt: Date.now()
+    });
+
+    if (requestId !== lyricsLookupRequestId || state.currentSong?.id !== song.id) {
+      return;
+    }
 
     displayCurrentLyrics();
+    if ($("lyricsStatus")) {
+      $("lyricsStatus").textContent =
+        source === "LRCLIB" ? "Free synced lyrics loaded" : "Free lyrics loaded (not timed)";
+    }
 
   } catch (error) {
-    console.error("Lyrics loading error:", error);
+    if (requestId !== lyricsLookupRequestId || state.currentSong?.id !== song.id) {
+      return;
+    }
+
+    console.warn("Automatic lyrics lookup failed:", error);
     state.currentLyrics = [];
+    state.currentLyricsSource = "none";
     displayCurrentLyrics();
+
+    if ($("lyricsStatus")) {
+      $("lyricsStatus").textContent =
+        error.message && error.message.startsWith("LRCLIB is busy")
+          ? error.message
+          : "Lyrics lookup unavailable. You can still import lyrics or transcribe.";
+    }
   }
 }
 
