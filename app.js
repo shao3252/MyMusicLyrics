@@ -639,6 +639,65 @@ function setupPlayerControls() {
 // AUDIO ENGINE EVENTS
 // --------------------------------------------------
 
+let spectrumContext = null;
+let spectrumAnalyser = null;
+let spectrumFrame = null;
+let spectrumSource = null;
+
+function setupSpectrum() {
+  const bars = $("spectrumBars");
+  const audio = audioEngine.audio;
+  if (!bars || !audio) return;
+
+  if (!bars.children.length) {
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < 36; i++) {
+      const bar = document.createElement("span");
+      bar.className = "spectrum-bar";
+      fragment.appendChild(bar);
+    }
+    bars.appendChild(fragment);
+  }
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    $("spectrumStatus").textContent = "NOT SUPPORTED";
+    return;
+  }
+
+  try {
+    if (!spectrumContext) {
+      spectrumContext = new AudioContextClass();
+      spectrumAnalyser = spectrumContext.createAnalyser();
+      spectrumAnalyser.fftSize = 128;
+      spectrumAnalyser.smoothingTimeConstant = 0.78;
+      spectrumSource = spectrumContext.createMediaElementSource(audio);
+      spectrumSource.connect(spectrumAnalyser);
+      spectrumAnalyser.connect(spectrumContext.destination);
+    }
+
+    const data = new Uint8Array(spectrumAnalyser.frequencyBinCount);
+    const draw = () => {
+      spectrumFrame = requestAnimationFrame(draw);
+      spectrumAnalyser.getByteFrequencyData(data);
+      const children = bars.children;
+      for (let i = 0; i < children.length; i++) {
+        const value = data[Math.floor(i * data.length / children.length)] || 0;
+        children[i].style.height = Math.max(4, (value / 255) * 100) + "%";
+      }
+      if ($("spectrumStatus")) $("spectrumStatus").textContent =
+        audioEngine.isPlaying() ? "ANALYZING" : "PAUSED";
+    };
+    if (spectrumContext.state === "suspended") spectrumContext.resume();
+    if (spectrumFrame) cancelAnimationFrame(spectrumFrame);
+    draw();
+  } catch (error) {
+    console.warn("Audio spectrum unavailable:", error);
+    if ($("spectrumStatus")) $("spectrumStatus").textContent = "UNAVAILABLE";
+  }
+}
+
+
 function setupAudioEvents() {
   audioEngine.on("loadedmetadata", () => {
     updateProgress();
@@ -648,7 +707,7 @@ function setupAudioEvents() {
     updateProgress();
   });
 
-  audioEngine.on("play", updatePlayButtons);
+  audioEngine.on("play", () => { updatePlayButtons(); setupSpectrum(); });
 
   audioEngine.on("pause", updatePlayButtons);
 
@@ -734,33 +793,34 @@ function updateMiniLyrics() {
   }
 
   const currentTime = audioEngine.getCurrentTime();
-  const timed = state.currentLyrics.some(line => line.time !== null);
-  let visible;
+  const duration = audioEngine.getDuration();
+  const timed = state.currentLyrics.some(line => Number.isFinite(line.time));
 
+  let active = 0;
   if (timed) {
-    let active = -1;
     state.currentLyrics.forEach((line, index) => {
-      if (line.time !== null && line.time <= currentTime) active = index;
+      if (Number.isFinite(line.time) && line.time <= currentTime) active = index;
     });
-    const start = active >= 0 ? active : Math.max(0, state.currentLyrics.findIndex(line => line.time !== null));
-    visible = state.currentLyrics.slice(start, start + 2);
-  } else {
-    visible = state.currentLyrics.slice(0, 3);
+  } else if (duration > 0 && state.currentLyrics.length > 1) {
+    // Plain lyrics have no timestamps. Move through lines evenly as an approximate guide.
+    active = Math.min(state.currentLyrics.length - 1,
+      Math.floor((currentTime / duration) * state.currentLyrics.length));
   }
 
-  const nextText = visible.map(line => line.text).join("\n");
-  if (container.dataset.lyricsText === nextText) return;
+  const visible = state.currentLyrics.slice(Math.max(0, active - 1), active + 3);
+  const key = active + ":" + visible.map(line => line.text).join("|");
+  if (container.dataset.lyricsKey === key) return;
 
   container.replaceChildren();
-  visible.forEach(line => {
+  visible.forEach((line, offset) => {
+    const index = Math.max(0, active - 1) + offset;
     const paragraph = document.createElement("p");
-    paragraph.className = "mini-lyric-line";
+    paragraph.className = "mini-lyric-line" + (index === active ? " active" : "");
     paragraph.textContent = line.text;
     container.appendChild(paragraph);
   });
-  container.dataset.lyricsText = nextText;
+  container.dataset.lyricsKey = key;
 }
-
 
 function displayCurrentLyrics() {
   const container = $("lyricsDisplay");
