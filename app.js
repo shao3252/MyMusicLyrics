@@ -193,7 +193,86 @@ function showScreen(screenName) {
 }
 
 
-function setupNavigation() {
+function createMoreMenu(buttonId, actions) {
+  const button = $(buttonId);
+  if (!button) return;
+
+  button.addEventListener("click", event => {
+    event.stopPropagation();
+    const existing = button.parentElement.querySelector(".more-menu");
+    document.querySelectorAll(".more-menu").forEach(menu => menu.remove());
+    if (existing) return;
+
+    const menu = createElement("div", "more-menu");
+    menu.setAttribute("role", "menu");
+
+    actions.forEach(action => {
+      const item = createElement("button", "more-menu-item", action.label);
+      item.type = "button";
+      item.setAttribute("role", "menuitem");
+      item.addEventListener("click", async clickEvent => {
+        clickEvent.stopPropagation();
+        menu.remove();
+        await action.run();
+      });
+      menu.appendChild(item);
+    });
+
+    button.parentElement.appendChild(menu);
+  });
+}
+
+function setupMoreMenus() {
+  createMoreMenu("playerMore", [
+    {
+      label: "Lyrics",
+      run: () => showScreen("lyrics")
+    },
+    {
+      label: "Add / remove favorite",
+      run: async () => {
+        if (!state.currentSong) {
+          showToast("Play a song first.");
+          return;
+        }
+        await toggleFavorite(state.currentSong);
+      }
+    },
+    {
+      label: "Song information",
+      run: () => {
+        const song = state.currentSong;
+        if (!song) {
+          showToast("No song is playing.");
+          return;
+        }
+        showToast(getSongTitle(song) + " — " + getSongArtist(song), 4500);
+      }
+    }
+  ]);
+
+  createMoreMenu("lyricsOptions", [
+    {
+      label: "Generate lyrics",
+      run: () => $("transcribeButton")?.click()
+    },
+    {
+      label: "Load LRC file",
+      run: () => $("loadLrcButton")?.click()
+    },
+    {
+      label: "Add / edit text lyrics",
+      run: () => $("editLyricsButton")?.click()
+    }
+  ]);
+
+  document.addEventListener("click", () => {
+    document.querySelectorAll(".more-menu").forEach(menu => menu.remove());
+  });
+}
+
+
+function setupNavigation() {\n  setupMoreMenus();
   document.querySelectorAll("[data-screen]").forEach(item => {
     item.addEventListener("click", () => {
       showScreen(item.dataset.screen);
