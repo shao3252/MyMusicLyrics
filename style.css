@@ -1269,3 +1269,23 @@ input[type="range"] {
         transition-duration: 0.01ms !important;
     }
 }
+
+
+/* PLAYER LIVE LYRICS + AUDIO SPECTRUM */
+#playerScreen .artwork-container { padding-bottom: 14px; }
+#playerScreen .album-art { width: min(52vw, 220px); border-radius: 22px; }
+#playerScreen .artwork-note { font-size: 76px; }
+#playerScreen .player-lyrics-card { margin: 8px 0 14px; min-height: 145px; }
+#playerScreen .lyrics-card-heading { margin-bottom: 12px; }
+#playerScreen .mini-lyrics { min-height: 82px; max-height: 112px; overflow: hidden; gap: 7px; }
+#playerScreen .mini-lyrics p { margin: 0; transition: opacity .25s ease, transform .25s ease; }
+#playerScreen .mini-lyrics .mini-lyric-line { color: #777080; font-size: 13px; font-weight: 600; }
+#playerScreen .mini-lyrics .mini-lyric-line.active { color: #F3E9FF; font-size: 17px; text-shadow: 0 0 18px rgba(180,125,255,.55); }
+.spectrum-card { background: linear-gradient(145deg,#11101A,#090910); border: 1px solid #282238; border-radius: 16px; padding: 12px 14px 10px; margin: 0 0 14px; }
+.spectrum-heading { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+.spectrum-heading strong { font-size:9px; letter-spacing:1.4px; color:#CFC4E2; }
+.spectrum-heading #spectrumStatus { margin-left:auto; color:#827795; font-size:8px; letter-spacing:1px; }
+.spectrum-dot { width:7px; height:7px; border-radius:50%; background:#9B5CFF; box-shadow:0 0 10px #9B5CFF; }
+.spectrum-bars { height:48px; display:flex; align-items:center; justify-content:center; gap:3px; overflow:hidden; }
+.spectrum-bar { flex:1; max-width:7px; height:5%; min-height:3px; border-radius:5px; background:linear-gradient(0deg,#5530A0,#B98AFF 65%,#6DDCFF); opacity:.85; transition:height .08s linear; }
+@media (max-width:380px) { #playerScreen .album-art { width:min(44vw,175px); } .spectrum-bars { height:40px; } }
