@@ -630,25 +630,30 @@ function setupMusicImport() {
 async function playSong(song) {
   if (!song) return;
 
+  // Switch the interface immediately; never leave the previous song's lyrics visible.
+  state.currentSong = song;
+  lyricsLookupRequestId++;
+  state.currentLyrics = [];
+  state.currentLyricsSource = "loading";
+  renderPlayer();
+  displayCurrentLyrics();
+  updateProgress();
+
   try {
-    let playlist = state.songs;
-
+    const playlist = state.songs;
     const index = playlist.findIndex(item => item.id === song.id);
+    if (index < 0) throw new Error("This song is no longer in your library.");
 
-    audioEngine.setPlaylist(playlist, Math.max(0, index));
-
-    await audioEngine.loadSong(Math.max(0, index), true);
-
-    state.currentSong = song;
+    audioEngine.setPlaylist(playlist, index);
+    const loaded = await audioEngine.loadSong(index, true);
+    if (!loaded || audioEngine.getCurrentSong()?.id !== song.id) return;
 
     await addToHistory(song.id);
-
+    if (audioEngine.getCurrentSong()?.id !== song.id) return;
     await refreshRecentSongs();
-
     renderPlayer();
     await loadCurrentSongLyrics();
     showScreen("player");
-
   } catch (error) {
     console.error("Playback error:", error);
     showToast("Unable to play this song. Check the audio file.");
@@ -806,16 +811,10 @@ function setupPlayerControls() {
 
   $("previousButton")?.addEventListener("click", async () => {
     await audioEngine.previous();
-    state.currentSong = audioEngine.getCurrentSong();
-    renderPlayer();
-    await loadCurrentSongLyrics();
   });
 
   $("nextButton")?.addEventListener("click", async () => {
     await audioEngine.next();
-    state.currentSong = audioEngine.getCurrentSong();
-    renderPlayer();
-    await loadCurrentSongLyrics();
   });
 
   $("shuffleButton")?.addEventListener("click", () => {
@@ -951,6 +950,18 @@ function setupAudioEvents() {
 
   audioEngine.on("timeupdate", () => {
     updateProgress();
+  });
+
+  audioEngine.on("songchange", ({ song }) => {
+    if (!song) return;
+    state.currentSong = song;
+    lyricsLookupRequestId++;
+    state.currentLyrics = [];
+    state.currentLyricsSource = "loading";
+    renderPlayer();
+    displayCurrentLyrics();
+    updateProgress();
+    loadCurrentSongLyrics();
   });
 
   audioEngine.on("play", () => { updatePlayButtons(); setupSpectrum(); });
@@ -1330,7 +1341,9 @@ function displayCurrentLyrics() {
   resetLyricsDisplay(container);
 
   if (state.currentLyrics.length === 0) {
-    container.textContent = "No lyrics available for this song yet.";
+    container.textContent = state.currentLyricsSource === "loading"
+      ? "Loading lyrics for " + getSongTitle(state.currentSong) + "..."
+      : "No lyrics available for this song yet.";
   } else {
     renderLyrics(
       container,
