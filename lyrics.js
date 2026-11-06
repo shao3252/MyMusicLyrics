@@ -1,222 +1,458 @@
-/**
- * Lyrics Engine for My Music Lyrics
- * Handles synchronization, display, and editing
+
+/*
+ * MY MUSIC LYRICS
+ * FILE 05: lyrics.js
+ *
+ * Lyrics parsing, timestamps, synchronization,
+ * highlighting, and manual editing helpers.
  */
 
-class LyricsEngine {
-  constructor() {
-    this.currentLyrics = null;
-    this.currentLineIndex = -1;
-    this.container = null;
-    this.isEditMode = false;
-    this.audioElement = null;
-    this.init();
+// Convert seconds into LRC timestamp format.
+export function formatTimestamp(seconds) {
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+
+  const minutes = Math.floor(safeSeconds / 60);
+  const remaining = (safeSeconds % 60).toFixed(2);
+
+  return `[${String(minutes).padStart(2, "0")}:${remaining.padStart(5, "0")}]`;
+}
+
+
+// Convert LRC timestamp into seconds.
+export function parseTimestamp(timestamp) {
+  const match = String(timestamp).match(
+    /^(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?$/
+  );
+
+  if (!match) return null;
+
+  const minutes = Number(match[1]);
+  const seconds = Number(match[2]);
+
+  const fraction = match[3]
+    ? Number("0." + match[3])
+    : 0;
+
+  if (seconds >= 60) return null;
+
+  return minutes * 60 + seconds + fraction;
+}
+
+
+// Parse an LRC file into timestamped lyric lines.
+export function parseLRC(lrcText) {
+  if (typeof lrcText !== "string") {
+    throw new TypeError("Lyrics must be provided as text.");
   }
 
-  init() {
-    this.audioElement = audioEngine.audio;
-    this.audioElement.addEventListener('timeupdate', () => this.update());
+  const lines = [];
+  const sourceLines = lrcText.split(/\r?\n/);
 
-    document.addEventListener('songchange', async (e) => {
-      await this.loadLyricsForSong(e.detail);
+  const timestampPattern =
+    /\[(\d{1,3}:\d{2}(?:\.\d{1,3})?)\]/g;
+
+  for (const sourceLine of sourceLines) {
+    const timestamps = [];
+    let match;
+
+    while ((match = timestampPattern.exec(sourceLine)) !== null) {
+      const time = parseTimestamp(match[1]);
+
+      if (time !== null) {
+        timestamps.push(time);
+      }
+    }
+
+    const text = sourceLine
+      .replace(timestampPattern, "")
+      .replace(/\[[a-zA-Z]+:[^\]]*\]/g, "")
+      .trim();
+
+    for (const time of timestamps) {
+      lines.push({
+        time,
+        text,
+        words: []
+      });
+    }
+  }
+
+  lines.sort((a, b) => a.time - b.time);
+
+  return lines;
+}
+
+
+// Convert ordinary lyrics text into untimed lines.
+export function parsePlainLyrics(text) {
+  if (typeof text !== "string") {
+    throw new TypeError("Lyrics must be text.");
+  }
+
+  return text
+    .split(/\r?\n/)
+    .map(line => ({
+      time: null,
+      text: line.trim(),
+      words: []
+    }))
+    .filter(line => line.text.length > 0);
+}
+
+
+// Validate and normalize lyrics.
+export function normalizeLyrics(lyrics) {
+  if (!Array.isArray(lyrics)) {
+    throw new TypeError("Lyrics must be an array.");
+  }
+
+  return lyrics
+    .map(line => {
+      const time =
+        line.time === null || line.time === undefined
+          ? null
+          : Number(line.time);
+
+      const words = Array.isArray(line.words)
+        ? line.words
+            .map(word => ({
+              start: Number(word.start),
+              end: Number(word.end),
+              text: String(word.text || "")
+            }))
+            .filter(word =>
+              Number.isFinite(word.start) &&
+              Number.isFinite(word.end) &&
+              word.start >= 0 &&
+              word.end >= word.start &&
+              word.text.length > 0
+            )
+        : [];
+
+      return {
+        time:
+          time !== null && Number.isFinite(time) && time >= 0
+            ? time
+            : null,
+
+        text: String(line.text || ""),
+        words
+      };
+    })
+    .filter(line => line.text.length > 0)
+    .sort((a, b) => {
+      if (a.time === null) return 1;
+      if (b.time === null) return -1;
+      return a.time - b.time;
+    });
+}
+
+
+// Find the active lyric line using binary search.
+export function getCurrentLineIndex(lyrics, currentTime) {
+  if (!Array.isArray(lyrics) || lyrics.length === 0) {
+    return -1;
+  }
+
+  const time = Number(currentTime);
+
+  if (!Number.isFinite(time) || time < 0) {
+    return -1;
+  }
+
+  let left = 0;
+  let right = lyrics.length - 1;
+  let result = -1;
+
+  while (left <= right) {
+    const middle = Math.floor((left + right) / 2);
+    const lineTime = lyrics[middle].time;
+
+    if (lineTime === null || lineTime === undefined) {
+      right = middle - 1;
+      continue;
+    }
+
+    if (lineTime <= time) {
+      result = middle;
+      left = middle + 1;
+    } else {
+      right = middle - 1;
+    }
+  }
+
+  return result;
+}
+
+
+// Find the active word when accurate word timestamps exist.
+export function getCurrentWordIndex(line, currentTime) {
+  if (!line || !Array.isArray(line.words)) {
+    return -1;
+  }
+
+  const time = Number(currentTime);
+
+  return line.words.findIndex(word =>
+    time >= word.start && time <= word.end
+  );
+}
+
+
+// Create a safe lyrics display.
+export function renderLyrics(container, lyrics, currentTime, options = {}) {
+  if (!container) return -1;
+
+  const normalized = normalizeLyrics(lyrics);
+
+  const activeIndex = getCurrentLineIndex(
+    normalized,
+    currentTime
+  );
+
+  const autoScroll = options.autoScroll !== false;
+
+  // Rebuild only when the lyrics data changes.
+  if (container.dataset.lyricsReady !== "true") {
+    container.replaceChildren();
+
+    normalized.forEach((line, index) => {
+      const element = document.createElement("div");
+
+      element.className = "lyric-line";
+      element.dataset.index = String(index);
+
+      const textElement = document.createElement("span");
+      textElement.className = "lyric-text";
+      textElement.textContent = line.text;
+
+      element.appendChild(textElement);
+
+      container.appendChild(element);
+    });
+
+    container.dataset.lyricsReady = "true";
+    container.dataset.activeIndex = "-1";
+  }
+
+  // Update highlighting.
+  if (container.dataset.lyricsReady === "true") {
+    const elements = container.querySelectorAll(".lyric-line");
+
+    elements.forEach((element, index) => {
+      const active = index === activeIndex;
+
+      element.classList.toggle("active", active);
+      element.classList.toggle("inactive", !active);
+
+      if (active) {
+        element.setAttribute("aria-current", "true");
+      } else {
+        element.removeAttribute("aria-current");
+      }
     });
   }
 
-  async loadLyricsForSong(song) {
-    if (!song) return;
-    try {
-      const saved = await storage.getLyrics(song.id);
-      if (saved) {
-        this.currentLyrics = saved;
-        this.display();
-      } else {
-        this.showNoLyrics();
-      }
-    } catch (error) {
-      console.error('Error loading lyrics:', error);
-      this.showError();
-    }
-  }
+  const previousIndex = Number(container.dataset.activeIndex);
 
-  async generateLyrics(song, method = 'auto') {
-    if (!song || !song.file) throw new Error('No audio file available');
+  if (
+    autoScroll &&
+    activeIndex >= 0 &&
+    activeIndex !== previousIndex
+  ) {
+    const activeElement = container.querySelector(
+      `[data-index="${activeIndex}"]`
+    );
 
-    try {
-      let result;
-      if (method === 'lrc' && song.lrcContent) {
-        result = transcriptionEngine.parseLRC(song.lrcContent);
-      } else {
-        showTranscriptionProgress('Starting transcription...');
-        result = await transcriptionEngine.transcribe(song.file, { language: 'auto', modelSize: 'tiny' });
-      }
-
-      await storage.saveLyrics(song.id, {
-        lines: result.lines,
-        words: result.words,
-        source: result.source,
-        songTitle: song.title,
-        artist: song.artist
-      });
-
-      this.currentLyrics = result;
-      this.display();
-      hideTranscriptionProgress();
-      return result;
-    } catch (error) {
-      hideTranscriptionProgress();
-      throw error;
-    }
-  }
-
-  display() {
-    if (!this.container) return;
-
-    if (!this.currentLyrics || !this.currentLyrics.lines || this.currentLyrics.lines.length === 0) {
-      this.showNoLyrics();
-      return;
-    }
-
-    this.container.innerHTML = '';
-    this.currentLineIndex = -1;
-
-    this.currentLyrics.lines.forEach((line, index) => {
-      const lineEl = document.createElement('div');
-      lineEl.className = 'lyric-line';
-      lineEl.dataset.index = index;
-      
-      const textEl = document.createElement('span');
-      textEl.className = 'lyric-text';
-      textEl.textContent = line.text;
-      lineEl.appendChild(textEl);
-      
-      lineEl.addEventListener('click', () => {
-        if (!this.isEditMode) audioEngine.seek(line.start + 0.1);
-      });
-      
-      if (this.isEditMode) {
-        textEl.contentEditable = true;
-        textEl.addEventListener('blur', async () => {
-          await this.updateLineText(index, textEl.textContent);
-        });
-      }
-
-      this.container.appendChild(lineEl);
+    activeElement?.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
     });
   }
 
-  update() {
-    if (!this.currentLyrics || !this.currentLyrics.lines) return;
+  container.dataset.activeIndex = String(activeIndex);
 
-    const currentTime = this.audioElement.currentTime;
-    const lines = this.currentLyrics.lines;
-    let newIndex = -1;
+  return activeIndex;
+}
 
-    for (let i = 0; i < lines.length; i++) {
-      if (currentTime >= lines[i].start && currentTime < lines[i].end) {
-        newIndex = i;
-        break;
-      }
-      if (currentTime < lines[i].start) break;
-      newIndex = i;
+
+// Render accurate word-level timing when available.
+export function renderWordLyrics(container, line, currentTime) {
+  if (!container || !line) return;
+
+  container.replaceChildren();
+
+  if (!Array.isArray(line.words) || line.words.length === 0) {
+    container.textContent = line.text || "";
+    return;
+  }
+
+  const activeWord = getCurrentWordIndex(line, currentTime);
+
+  line.words.forEach((word, index) => {
+    const span = document.createElement("span");
+
+    span.className = "lyric-word";
+    span.textContent = word.text + " ";
+
+    if (index === activeWord) {
+      span.classList.add("active");
     }
 
-    if (newIndex !== this.currentLineIndex) {
-      if (this.currentLineIndex >= 0) {
-        const oldEl = this.container.querySelector(`[data-index="${this.currentLineIndex}"]`);
-        if (oldEl) oldEl.classList.remove('active');
-      }
-
-      if (newIndex >= 0) {
-        const newEl = this.container.querySelector(`[data-index="${newIndex}"]`);
-        if (newEl) {
-          newEl.classList.add('active');
-          this.scrollToLine(newEl);
-        }
-      }
-      this.currentLineIndex = newIndex;
-    }
-  }
-
-  scrollToLine(lineEl) {
-    if (!lineEl || !this.container) return;
-    const containerRect = this.container.getBoundingClientRect();
-    const lineRect = lineEl.getBoundingClientRect();
-    const scrollTop = this.container.scrollTop + (lineRect.top - containerRect.top) - (containerRect.height / 2) + (lineRect.height / 2);
-    this.container.scrollTo({ top: scrollTop, behavior: 'smooth' });
-  }
-
-  async updateLineText(index, newText) {
-    if (!this.currentLyrics || !this.currentLyrics.lines[index]) return;
-    this.currentLyrics.lines[index].text = newText;
-    const song = audioEngine.currentSong;
-    if (song) await storage.saveLyrics(song.id, this.currentLyrics);
-  }
-
-  toggleEditMode() {
-    this.isEditMode = !this.isEditMode;
-    this.display();
-    return this.isEditMode;
-  }
-
-  showNoLyrics() {
-    if (!this.container) return;
-    this.container.innerHTML = `
-      <div class="no-lyrics">
-        <div class="no-lyrics-icon">🎵</div>
-        <p>No lyrics available for this song</p>
-        <button class="btn-primary" onclick="generateLyrics()">Generate Lyrics</button>
-        <button class="btn-secondary" onclick="importLRC()" style="margin-top:10px;">Import LRC File</button>
-      </div>
-    `;
-  }
-
-  showError() {
-    if (!this.container) return;
-    this.container.innerHTML = `<div class="error-message"><p>Error loading lyrics</p></div>`;
-  }
-
-  setContainer(element) { this.container = element; }
+    container.appendChild(span);
+  });
 }
 
-function showTranscriptionProgress(message) {
-  const overlay = document.getElementById('transcription-overlay');
-  const msgEl = document.getElementById('transcription-message');
-  if (overlay && msgEl) {
-    overlay.style.display = 'flex';
-    msgEl.textContent = message;
+
+// Convert timestamped lyrics back into LRC text.
+export function exportLRC(lyrics) {
+  const normalized = normalizeLyrics(lyrics);
+
+  return normalized
+    .filter(line => line.time !== null)
+    .map(line =>
+      `${formatTimestamp(line.time)}${line.text}`
+    )
+    .join("\n");
+}
+
+
+// Convert lyrics into ordinary editable text.
+export function exportPlainLyrics(lyrics) {
+  return normalizeLyrics(lyrics)
+    .map(line => line.text)
+    .join("\n");
+}
+
+
+// Update a lyric line's text.
+export function updateLyricLine(lyrics, index, newText) {
+  const normalized = normalizeLyrics(lyrics);
+
+  if (
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= normalized.length
+  ) {
+    throw new RangeError("Invalid lyric line index.");
   }
+
+  normalized[index].text = String(newText);
+
+  return normalized;
 }
 
-function hideTranscriptionProgress() {
-  const overlay = document.getElementById('transcription-overlay');
-  if (overlay) overlay.style.display = 'none';
-}
 
-async function generateLyrics() {
-  const song = audioEngine.currentSong;
-  if (!song) return;
-  try {
-    await lyricsEngine.generateLyrics(song, 'auto');
-  } catch (error) {
-    alert('Transcription failed: ' + error.message + '\n\nTry importing an LRC file instead.');
+// Change a lyric line's timestamp.
+export function updateLyricTimestamp(lyrics, index, newTime) {
+  const normalized = normalizeLyrics(lyrics);
+
+  if (
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= normalized.length
+  ) {
+    throw new RangeError("Invalid lyric line index.");
   }
+
+  const time = Number(newTime);
+
+  if (!Number.isFinite(time) || time < 0) {
+    throw new TypeError("Invalid timestamp.");
+  }
+
+  normalized[index].time = time;
+
+  return normalized.sort((a, b) => {
+    if (a.time === null) return 1;
+    if (b.time === null) return -1;
+    return a.time - b.time;
+  });
 }
 
-function importLRC() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.lrc,.txt';
-  input.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const text = await file.text();
-    const song = audioEngine.currentSong;
-    if (song) {
-      song.lrcContent = text;
-      await lyricsEngine.generateLyrics(song, 'lrc');
-    }
+
+// Create a lyric line at a selected playback time.
+export function addLyricLine(lyrics, text, time = null) {
+  const normalized = normalizeLyrics(lyrics);
+
+  const newLine = {
+    time:
+      time === null
+        ? null
+        : Number(time),
+
+    text: String(text || "").trim(),
+    words: []
   };
-  input.click();
+
+  if (!newLine.text) {
+    throw new TypeError("Lyric text cannot be empty.");
+  }
+
+  if (
+    newLine.time !== null &&
+    (!Number.isFinite(newLine.time) || newLine.time < 0)
+  ) {
+    throw new TypeError("Invalid lyric timestamp.");
+  }
+
+  normalized.push(newLine);
+
+  return normalized.sort((a, b) => {
+    if (a.time === null) return 1;
+    if (b.time === null) return -1;
+    return a.time - b.time;
+  });
 }
 
-const lyricsEngine = new LyricsEngine();
+
+// Remove a lyric line.
+export function deleteLyricLine(lyrics, index) {
+  const normalized = normalizeLyrics(lyrics);
+
+  if (
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= normalized.length
+  ) {
+    throw new RangeError("Invalid lyric line index.");
+  }
+
+  normalized.splice(index, 1);
+
+  return normalized;
+}
+
+
+// Reset the lyrics display so new lyrics can be rendered.
+export function resetLyricsDisplay(container) {
+  if (!container) return;
+
+  container.replaceChildren();
+
+  delete container.dataset.lyricsReady;
+  delete container.dataset.activeIndex;
+}
+
+
+// Default lyrics utility object.
+const lyricsEngine = {
+  formatTimestamp,
+  parseTimestamp,
+  parseLRC,
+  parsePlainLyrics,
+  normalizeLyrics,
+  getCurrentLineIndex,
+  getCurrentWordIndex,
+  renderLyrics,
+  renderWordLyrics,
+  exportLRC,
+  exportPlainLyrics,
+  updateLyricLine,
+  updateLyricTimestamp,
+  addLyricLine,
+  deleteLyricLine,
+  resetLyricsDisplay
+};
+
+export default lyricsEngine;

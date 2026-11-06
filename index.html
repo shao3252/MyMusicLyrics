@@ -1,220 +1,624 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+
     <meta name="theme-color" content="#000000">
+    <meta name="description" content="My Music Lyrics - Advanced music player with synchronized lyrics.">
+
+    <title>My Music Lyrics</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>My Music Lyrics</title>
-    <link rel="manifest" href="./manifest.json">
-    <link rel="stylesheet" href="./style.css">
+    <meta name="apple-mobile-web-app-title" content="My Music Lyrics">
 </head>
+
 <body>
-    <div id="app">
-        <!-- Header -->
-        <header class="header">
-            <h1>My Music Lyrics</h1>
-            <div class="search-container">
-                <input type="text" id="search-input" placeholder="Search songs, artists...">
-            </div>
-        </header>
 
-        <!-- Home Screen -->
-        <div id="screen-home" class="screen active">
-            <div id="drop-zone" class="drop-zone">
-                <p>📁 Tap to add music or drop files here</p>
-                <input type="file" id="file-input" accept="audio/*" multiple style="display: none;">
-                <button class="btn-primary" id="add-music-btn" style="margin-top: 16px;">Add Music</button>
+<div class="app-container">
+
+    <!-- HEADER -->
+    <header class="app-header">
+
+        <div class="brand">
+            <div class="brand-icon">
+                <span>♫</span>
             </div>
 
-            <h2 style="margin-top: 24px; margin-bottom: 16px;">Recently Played</h2>
-            <div id="recent-list" class="recent-list"></div>
-
-            <h2 style="margin-top: 24px; margin-bottom: 16px;">Quick Access</h2>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                <button class="btn-primary" onclick="musicApp.navigateTo('songs')">🎵 All Songs</button>
-                <button class="btn-primary" onclick="musicApp.navigateTo('playlists')">📋 Playlists</button>
+            <div class="brand-text">
+                <h1>My Music <span>Lyrics</span></h1>
+                <p>Your music. Your lyrics.</p>
             </div>
         </div>
 
-        <!-- All Songs Screen -->
-        <div id="screen-songs" class="screen">
-            <h2 style="margin-bottom: 16px;">All Songs</h2>
-            <div id="songs-list" class="songs-list"></div>
-        </div>
+        <button class="icon-button" id="settingsShortcut"
+                aria-label="Settings">
+            ⚙
+        </button>
 
-        <!-- Now Playing Screen -->
-        <div id="screen-now-playing" class="screen">
-            <div class="np-artwork" id="np-artwork">
-                <span class="music-icon large">🎵</span>
+    </header>
+
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+        <!-- HOME SCREEN -->
+        <section class="screen active" id="homeScreen">
+
+            <div class="welcome-section">
+                <p class="eyebrow">YOUR PERSONAL MUSIC SPACE</p>
+
+                <h2>Feel the <span>music.</span></h2>
+
+                <p class="muted">
+                    Listen to your favourite songs with synchronized lyrics.
+                </p>
             </div>
 
-            <!-- Neon Audio Visualizer Canvas -->
-            <div class="visualizer-container">
-                <canvas id="audio-visualizer" width="300" height="70"></canvas>
+            <div class="quick-actions">
+
+                <button class="primary-button" id="addMusicHome">
+                    ＋ Add Music
+                </button>
+
+                <button class="secondary-button" id="openAllSongs">
+                    ♫ All Songs
+                </button>
+
             </div>
-            
-            <div class="np-info">
-                <div class="np-title" id="np-title">No song playing</div>
-                <div class="np-artist" id="np-artist">Select a song to play</div>
-            </div>
 
-            <div class="playback-controls">
-                <div class="seek-container">
-                    <span class="time-display" id="current-time">0:00</span>
-                    <input type="range" id="seek-bar" min="0" max="100" value="0">
-                    <span class="time-display" id="total-time">0:00</span>
-                </div>
-
-                <div class="control-buttons">
-                    <button class="control-btn" id="shuffle-btn" title="Shuffle">🔀</button>
-                    <button class="control-btn" id="prev-btn" title="Previous">⏮</button>
-                    <button class="control-btn" id="play-btn" title="Play/Pause">
-                        <span>▶</span>
-                    </button>
-                    <button class="control-btn" id="next-btn" title="Next">⏭</button>
-                    <button class="control-btn" id="repeat-btn" title="Repeat">🔁</button>
-                </div>
-
-                <div class="volume-container">
-                    <span>🔈</span>
-                    <input type="range" id="volume-slider" min="0" max="100" value="100">
-                    <span>🔊</span>
-                </div>
-
-                <button class="btn-primary" onclick="musicApp.navigateTo('lyrics')" style="margin-top: 24px; width: 100%;">
-                    🎤 View Lyrics
+            <div class="section-heading">
+                <h3>Recently Played</h3>
+                <button class="text-button" data-screen="songs">
+                    See all
                 </button>
             </div>
-        </div>
 
-        <!-- Lyrics Screen -->
-        <div id="screen-lyrics" class="screen">
-            <div class="lyrics-header">
-                <h2>Lyrics</h2>
-                <div class="lyrics-actions">
-                    <button class="lyrics-btn" onclick="generateLyrics()">Auto-Generate</button>
-                    <button class="lyrics-btn" onclick="importLRC()">Import LRC</button>
-                    <button class="lyrics-btn" onclick="lyricsEngine.toggleEditMode()">Edit</button>
+            <div class="song-list" id="recentSongs">
+
+                <div class="empty-state">
+                    <div class="empty-icon">♫</div>
+                    <h3>No music yet</h3>
+                    <p>Add music from your Android device to get started.</p>
                 </div>
-            </div>
-            <div id="lyrics-container"></div>
-        </div>
 
-        <!-- Playlists Screen -->
-        <div id="screen-playlists" class="screen">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            </div>
+
+            <div class="section-heading">
+                <h3>Your Music Library</h3>
+            </div>
+
+            <div class="library-summary">
+
+                <div class="summary-card">
+                    <span class="summary-icon">♫</span>
+                    <strong id="homeSongCount">0</strong>
+                    <span>Songs</span>
+                </div>
+
+                <div class="summary-card">
+                    <span class="summary-icon">▤</span>
+                    <strong id="homePlaylistCount">0</strong>
+                    <span>Playlists</span>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ALL SONGS SCREEN -->
+        <section class="screen" id="songsScreen">
+
+            <div class="page-heading">
+                <p class="eyebrow">YOUR COLLECTION</p>
+                <h2>All Songs</h2>
+            </div>
+
+            <div class="search-box">
+                <span>⌕</span>
+
+                <input type="search"
+                       id="songSearch"
+                       placeholder="Search songs or artists..."
+                       autocomplete="off">
+            </div>
+
+            <div class="song-toolbar">
+
+                <span id="songCount">0 songs</span>
+
+                <button class="secondary-button small-button"
+                        id="addMusicSongs">
+                    ＋ Add
+                </button>
+
+            </div>
+
+            <div class="song-list" id="allSongsList">
+
+                <div class="empty-state">
+                    <div class="empty-icon">♫</div>
+                    <h3>Your library is empty</h3>
+                    <p>Select audio files to add your music.</p>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- NOW PLAYING SCREEN -->
+        <section class="screen" id="playerScreen">
+
+            <div class="player-topbar">
+
+                <button class="icon-button" id="playerBack"
+                        aria-label="Back">
+                    ↓
+                </button>
+
+                <div class="player-top-title">
+                    <span>NOW PLAYING</span>
+                    <strong>My Music Lyrics</strong>
+                </div>
+
+                <button class="icon-button" id="playerMore"
+                        aria-label="More options">
+                    ⋮
+                </button>
+
+            </div>
+
+            <div class="artwork-container">
+
+                <div class="album-art" id="albumArtwork">
+                    <span class="artwork-note">♫</span>
+                    <span class="artwork-brand">MY MUSIC LYRICS</span>
+                </div>
+
+            </div>
+
+            <div class="track-information">
+
+                <div class="track-details">
+                    <h2 id="currentTitle">No song selected</h2>
+                    <p id="currentArtist">Unknown Artist</p>
+                </div>
+
+                <button class="icon-button favorite-button"
+                        id="favoriteButton"
+                        aria-label="Favorite song">
+                    ♡
+                </button>
+
+            </div>
+
+
+            <!-- AUDIO PROGRESS -->
+            <div class="progress-container">
+
+                <input type="range"
+                       id="seekBar"
+                       min="0"
+                       max="100"
+                       value="0"
+                       step="0.1"
+                       aria-label="Seek through song">
+
+                <div class="time-information">
+                    <span id="currentTime">0:00</span>
+                    <span id="totalDuration">0:00</span>
+                </div>
+
+            </div>
+
+
+            <!-- PLAYER CONTROLS -->
+            <div class="player-controls">
+
+                <button class="control-button"
+                        id="shuffleButton"
+                        aria-label="Shuffle">
+                    ⤨
+                </button>
+
+                <button class="control-button large-control"
+                        id="previousButton"
+                        aria-label="Previous song">
+                    |◀
+                </button>
+
+                <button class="play-button"
+                        id="playButton"
+                        aria-label="Play">
+                    ▶
+                </button>
+
+                <button class="control-button large-control"
+                        id="nextButton"
+                        aria-label="Next song">
+                    ▶|
+                </button>
+
+                <button class="control-button"
+                        id="repeatButton"
+                        aria-label="Repeat">
+                    ↻
+                </button>
+
+            </div>
+
+
+            <!-- VOLUME -->
+            <div class="volume-container">
+
+                <span>◁</span>
+
+                <input type="range"
+                       id="volumeControl"
+                       min="0"
+                       max="1"
+                       step="0.01"
+                       value="1"
+                       aria-label="Volume">
+
+                <span>▷</span>
+
+            </div>
+
+
+            <!-- MINI LYRICS -->
+            <div class="player-lyrics-card">
+
+                <div class="lyrics-card-heading">
+
+                    <div>
+                        <span class="lyrics-indicator"></span>
+                        <strong>LIVE LYRICS</strong>
+                    </div>
+
+                    <button class="text-button"
+                            data-screen="lyrics">
+                        View all
+                    </button>
+
+                </div>
+
+                <div class="mini-lyrics" id="miniLyrics">
+
+                    <p class="muted">
+                        Lyrics will appear here when available.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- LYRICS SCREEN -->
+        <section class="screen" id="lyricsScreen">
+
+            <div class="lyrics-topbar">
+
+                <button class="icon-button" id="lyricsBack"
+                        aria-label="Back">
+                    ←
+                </button>
+
+                <div>
+                    <span class="eyebrow">SYNCHRONIZED LYRICS</span>
+                    <h2>Lyrics</h2>
+                </div>
+
+                <button class="icon-button" id="lyricsOptions"
+                        aria-label="Lyrics options">
+                    ⋮
+                </button>
+
+            </div>
+
+            <div class="lyrics-song-info">
+
+                <div class="small-artwork">♫</div>
+
+                <div>
+                    <strong id="lyricsSongTitle">No song selected</strong>
+                    <p id="lyricsSongArtist">Unknown Artist</p>
+                </div>
+
+            </div>
+
+            <div class="lyrics-status" id="lyricsStatus">
+                No lyrics loaded
+            </div>
+
+            <div class="lyrics-display" id="lyricsDisplay">
+
+                <div class="lyrics-placeholder">
+                    <span>♫</span>
+                    <h3>Your lyrics will appear here</h3>
+                    <p>
+                        Load an LRC file or use automatic AI transcription.
+                    </p>
+                </div>
+
+            </div>
+
+            <div class="lyrics-actions">
+
+                <button class="secondary-button"
+                        id="loadLrcButton">
+                    Load LRC
+                </button>
+
+                <button class="primary-button"
+                        id="transcribeButton">
+                    ✦ Generate Lyrics
+                </button>
+
+            </div>
+
+            <div class="lyrics-editor-actions">
+
+                <button class="text-button" id="editLyricsButton">
+                    Edit Lyrics
+                </button>
+
+                <button class="text-button" id="saveLyricsButton">
+                    Save Lyrics
+                </button>
+
+            </div>
+
+            <div class="lyrics-editor" id="lyricsEditor"
+                 hidden>
+
+                <textarea id="lyricsTextarea"
+                          placeholder="Edit your lyrics here..."></textarea>
+
+                <button class="primary-button"
+                        id="applyLyricsButton">
+                    Apply Changes
+                </button>
+
+                <button class="text-button"
+                        id="cancelLyricsEdit">
+                    Cancel
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- PLAYLISTS SCREEN -->
+        <section class="screen" id="playlistsScreen">
+
+            <div class="page-heading">
+
+                <p class="eyebrow">ORGANIZE YOUR MUSIC</p>
+
                 <h2>Playlists</h2>
-                <button class="btn-primary" id="create-playlist-btn">+ New</button>
-            </div>
-            <div id="playlists-list" class="playlists-list"></div>
-        </div>
 
-        <!-- Settings Screen -->
-        <div id="screen-settings" class="screen">
-            <h2 style="margin-bottom: 16px;">Settings</h2>
-            
-            <div style="background: var(--bg-card); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 16px;">
-                <h3 style="margin-bottom: 12px;">Transcription</h3>
-                <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">
-                    Configure external transcription API (optional). Local Whisper model downloads automatically on first use.
+            </div>
+
+            <button class="primary-button full-button"
+                    id="createPlaylistButton">
+                ＋ Create Playlist
+            </button>
+
+            <div id="playlistContainer">
+
+                <div class="empty-state">
+                    <div class="empty-icon">▤</div>
+                    <h3>No playlists yet</h3>
+                    <p>Create playlists to organize your favourite songs.</p>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- SETTINGS SCREEN -->
+        <section class="screen" id="settingsScreen">
+
+            <div class="page-heading">
+
+                <p class="eyebrow">PERSONALIZE YOUR EXPERIENCE</p>
+
+                <h2>Settings</h2>
+
+            </div>
+
+            <div class="settings-group">
+
+                <h3>Music Library</h3>
+
+                <button class="settings-item"
+                        id="settingsAddMusic">
+                    <span>♫</span>
+                    <div>
+                        <strong>Add Music</strong>
+                        <small>Import audio files from your device</small>
+                    </div>
+                    <span>›</span>
+                </button>
+
+                <button class="settings-item"
+                        id="clearHistoryButton">
+                    <span>◷</span>
+                    <div>
+                        <strong>Clear Recently Played</strong>
+                        <small>Remove your listening history</small>
+                    </div>
+                    <span>›</span>
+                </button>
+
+            </div>
+
+
+            <div class="settings-group">
+
+                <h3>Lyrics & AI</h3>
+
+                <div class="setting-description">
+                    <strong>Automatic Transcription</strong>
+                    <p>
+                        Connect a compatible transcription service
+                        to generate lyrics from music.
+                    </p>
+                </div>
+
+                <label class="input-label" for="transcriptionEndpoint">
+                    Transcription API endpoint
+                </label>
+
+                <input type="url"
+                       id="transcriptionEndpoint"
+                       class="settings-input"
+                       placeholder="https://your-server.example/transcribe">
+
+                <button class="secondary-button full-button"
+                        id="saveTranscriptionSettings">
+                    Save Transcription Settings
+                </button>
+
+                <p class="settings-note">
+                    Use a secure HTTPS backend. Never enter a private
+                    API key into this public frontend.
                 </p>
-                <input type="text" id="api-endpoint" placeholder="API Endpoint (optional)" style="width: 100%; padding: 8px; margin-bottom: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary);">
-                <input type="password" id="api-key" placeholder="API Key (optional)" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary);">
-                <button class="btn-primary" onclick="saveApiSettings()" style="margin-top: 8px; width: 100%;">Save</button>
+
             </div>
 
-            <div style="background: var(--bg-card); padding: 16px; border-radius: var(--radius-sm);">
-                <h3 style="margin-bottom: 12px;">About</h3>
-                <p style="font-size: 14px; color: var(--text-secondary);">
-                    My Music Lyrics v1.0<br>
-                    Local music player with automatic lyric synchronization.<br><br>
-                    <strong>Note:</strong> Background playback requires PWA installation. 
-                    Transcription requires internet for model download or API access.
-                </p>
+
+            <div class="settings-group">
+
+                <h3>Application</h3>
+
+                <div class="setting-description">
+                    <strong>My Music Lyrics</strong>
+                    <p>Version 1.0.0</p>
+                    <p>Advanced Android Music Player PWA.</p>
+                </div>
+
+                <button class="settings-item"
+                        id="installAppButton">
+                    <span>⇩</span>
+                    <div>
+                        <strong>Install Application</strong>
+                        <small>Install on your Android device</small>
+                    </div>
+                    <span>›</span>
+                </button>
+
             </div>
 
-            <button class="btn-primary" id="install-btn" style="display: none; margin-top: 16px; width: 100%;">
-                📲 Install App
-            </button>
+        </section>
+
+    </main>
+
+
+    <!-- MINI PLAYER -->
+    <div class="mini-player" id="miniPlayer">
+
+        <div class="mini-player-art">♫</div>
+
+        <div class="mini-player-info">
+            <strong id="miniPlayerTitle">No song selected</strong>
+            <span id="miniPlayerArtist">Choose a song</span>
         </div>
 
-        <!-- Mini Player -->
-        <div class="mini-player" id="mini-player" onclick="musicApp.navigateTo('now-playing')">
-            <div class="mini-player-artwork">
-                <span class="music-icon">🎵</span>
-            </div>
-            <div class="mini-player-info">
-                <div class="mini-player-title" id="mini-player-title">No song</div>
-                <div class="mini-player-artist" id="mini-player-artist">Select music</div>
-            </div>
-            <div class="mini-player-controls">
-                <button class="mini-btn" onclick="event.stopPropagation(); audioEngine.toggle()">▶</button>
-            </div>
-        </div>
+        <button class="mini-play-button"
+                id="miniPlayButton"
+                aria-label="Play or pause">
+            ▶
+        </button>
 
-        <!-- Bottom Navigation -->
-        <nav class="bottom-nav">
-            <button class="nav-item active" data-screen="home">
-                <span>🏠</span>
-                <span>Home</span>
-            </button>
-            <button class="nav-item" data-screen="songs">
-                <span>🎵</span>
-                <span>Songs</span>
-            </button>
-            <button class="nav-item" data-screen="now-playing">
-                <span>▶</span>
-                <span>Now Playing</span>
-            </button>
-            <button class="nav-item" data-screen="lyrics">
-                <span>🎤</span>
-                <span>Lyrics</span>
-            </button>
-            <button class="nav-item" data-screen="playlists">
-                <span>📋</span>
-                <span>Playlists</span>
-            </button>
-            <button class="nav-item" data-screen="settings">
-                <span>⚙️</span>
-                <span>Settings</span>
-            </button>
-        </nav>
-
-        <!-- Transcription Overlay -->
-        <div class="transcription-overlay" id="transcription-overlay">
-            <div class="transcription-box">
-                <div class="spinner"></div>
-                <p id="transcription-message">Processing...</p>
-            </div>
-        </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/whisper.cpp@1.0.0/dist/whisper.min.js"></script>
-    <script src="./storage.js"></script>
-    <script src="./transcription.js"></script>
-    <script src="./audio.js"></script>
-    <script src="./lyrics.js"></script>
-    <script src="./app.js"></script>
 
-    <script>
-        function saveApiSettings() {
-            const endpoint = document.getElementById('api-endpoint').value;
-            const key = document.getElementById('api-key').value;
-            transcriptionEngine.configureAPI(endpoint, key);
-            storage.setSetting('apiEndpoint', endpoint);
-            storage.setSetting('apiKey', key);
-            alert('Settings saved');
-        }
+    <!-- BOTTOM NAVIGATION -->
+    <nav class="bottom-navigation">
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const endpoint = await storage.getSetting('apiEndpoint');
-            const key = await storage.getSetting('apiKey');
-            if (endpoint) document.getElementById('api-endpoint').value = endpoint;
-            if (key) document.getElementById('api-key').value = key;
-            if (endpoint && key) transcriptionEngine.configureAPI(endpoint, key);
-        });
-    </script>
+        <button class="nav-item active"
+                data-screen="home"
+                aria-label="Home">
+            <span>⌂</span>
+            <small>Home</small>
+        </button>
+
+        <button class="nav-item"
+                data-screen="songs"
+                aria-label="Songs">
+            <span>♫</span>
+            <small>Songs</small>
+        </button>
+
+        <button class="nav-item"
+                data-screen="player"
+                aria-label="Now Playing">
+            <span>◉</span>
+            <small>Playing</small>
+        </button>
+
+        <button class="nav-item"
+                data-screen="lyrics"
+                aria-label="Lyrics">
+            <span>≡</span>
+            <small>Lyrics</small>
+        </button>
+
+        <button class="nav-item"
+                data-screen="playlists"
+                aria-label="Playlists">
+            <span>▤</span>
+            <small>Playlists</small>
+        </button>
+
+    </nav>
+
+</div>
+
+
+<!-- FILE INPUTS -->
+<input type="file"
+       id="audioFileInput"
+       accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+       multiple
+       hidden>
+
+<input type="file"
+       id="lrcFileInput"
+       accept=".lrc,text/plain"
+       hidden>
+
+
+<!-- NOTIFICATION -->
+<div class="toast" id="toast" role="status"
+     aria-live="polite">
+</div>
+
+
+<!-- AUDIO ENGINE -->
+<audio id="audioElement"
+       preload="metadata"
+       playsinline>
+</audio>
+
+
+<!-- APPLICATION SCRIPT -->
+<script type="module" src="app.js"></script>
+
 </body>
 </html>

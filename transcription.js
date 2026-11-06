@@ -1,206 +1,320 @@
-/**
- * Transcription Engine for My Music Lyrics
- * Supports: Whisper.cpp (local), External APIs, Manual LRC
+
+/*
+ * MY MUSIC LYRICS
+ * FILE 06: transcription.js
+ *
+ * Connects the app to a real transcription backend.
+ *
+ * Expected backend response:
+ *
+ * {
+ *   "segments": [
+ *     {
+ *       "start": 1.2,
+ *       "end": 3.5,
+ *       "text": "Example lyric",
+ *       "words": [
+ *         {
+ *           "start": 1.2,
+ *           "end": 1.8,
+ *           "text": "Example"
+ *         },
+ *         {
+ *           "start": 1.9,
+ *           "end": 3.5,
+ *           "text": "lyric"
+ *         }
+ *       ]
+ *     }
+ *   ]
+ * }
  */
 
-class TranscriptionEngine {
-  constructor() {
-    this.whisperWorker = null;
-    this.isModelLoaded = false;
-    this.modelSize = 'tiny';
-    this.apiEndpoint = null;
-    this.apiKey = null;
-    this.progressCallback = null;
+const DEFAULT_TIMEOUT = 180000;
+const MAX_AUDIO_SIZE = 100 * 1024 * 1024;
+
+
+// Validate the transcription endpoint.
+export function validateEndpoint(endpoint) {
+  if (!endpoint || typeof endpoint !== "string") {
+    throw new Error("Enter your transcription server URL in Settings.");
   }
 
-  async initWhisper(modelSize = 'tiny') {
-    return new Promise((resolve, reject) => {
-      if (typeof Whisper === 'undefined') {
-        reject(new Error('Whisper WASM not loaded.'));
-        return;
-      }
+  let parsed;
 
-      this.modelSize = modelSize;
-      
-      if (this.progressCallback) {
-        this.progressCallback({ status: 'loading', progress: 0, message: 'Downloading AI model...' });
-      }
-
-      Whisper.init({
-        model: modelSize,
-        onProgress: (progress) => {
-          if (this.progressCallback) {
-            this.progressCallback({ 
-              status: 'loading', 
-              progress: progress, 
-              message: `Loading model: ${Math.round(progress * 100)}%` 
-            });
-          }
-        }
-      }).then((instance) => {
-        this.whisperWorker = instance;
-        this.isModelLoaded = true;
-        if (this.progressCallback) {
-          this.progressCallback({ status: 'ready', progress: 1, message: 'Model ready' });
-        }
-        resolve(instance);
-      }).catch(reject);
-    });
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new Error("The transcription server URL is invalid.");
   }
 
-  async transcribeWithWhisper(audioBlob, options = {}) {
-    if (!this.isModelLoaded) {
-      await this.initWhisper(options.modelSize || 'tiny');
-    }
+  const isLocalhost =
+    parsed.hostname === "localhost" ||
+    parsed.hostname === "127.0.0.1";
 
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const audioData = new Uint8Array(e.target.result);
-          
-          if (this.progressCallback) {
-            this.progressCallback({ status: 'transcribing', progress: 0, message: 'Transcribing audio...' });
-          }
+  if (parsed.protocol !== "https:" && !isLocalhost) {
+    throw new Error(
+      "For security, the transcription server must use HTTPS."
+    );
+  }
 
-          const result = await this.whisperWorker.transcribe(audioData, {
-            language: options.language || 'auto',
-            wordTimestamps: true,
-            onProgress: (progress) => {
-              if (this.progressCallback) {
-                this.progressCallback({ 
-                  status: 'transcribing', 
-                  progress: progress, 
-                  message: `Transcribing: ${Math.round(progress * 100)}%` 
-                });
-              }
-            }
-          });
+  if (parsed.username || parsed.password) {
+    throw new Error(
+      "Do not put usernames or passwords inside the server URL."
+    );
+  }
 
-          const lines = [];
-          const words = [];
+  return parsed.href;
+}
 
-          if (result.words) {
-            result.words.forEach(w => {
-              words.push({ start: w.start, end: w.end, word: w.word });
-            });
 
-            let currentLine = { start: 0, end: 0, text: '', words: [] };
-            result.words.forEach((w) => {
-              if (currentLine.words.length === 0) {
-                currentLine.start = w.start;
-              }
-              currentLine.words.push(w);
-              currentLine.text += w.word + ' ';
-              currentLine.end = w.end;
+// Convert seconds or milliseconds into seconds.
+function normalizeTime(value) {
+  const number = Number(value);
 
-              if (currentLine.words.length >= 8 || /[.!?]$/.test(w.word)) {
-                lines.push({ ...currentLine });
-                currentLine = { start: 0, end: 0, text: '', words: [] };
-              }
-            });
-            if (currentLine.words.length > 0) {
-              lines.push(currentLine);
-            }
-          } else if (result.segments) {
-            result.segments.forEach(seg => {
-              lines.push({ start: seg.start, end: seg.end, text: seg.text });
-            });
-          }
+  if (!Number.isFinite(number) || number < 0) {
+    return null;
+  }
 
-          resolve({ lines, words, source: 'whisper' });
-        } catch (error) {
-          reject(error);
-        }
+  // Supports common millisecond timestamp responses.
+  return number > 100000 ? number / 1000 : number;
+}
+
+
+// Normalize word timestamps.
+function normalizeWords(words) {
+  if (!Array.isArray(words)) return [];
+
+  return words
+    .map(word => {
+      const start = normalizeTime(word.start);
+      const end = normalizeTime(word.end);
+
+      return {
+        start,
+        end,
+        text: String(word.text || word.word || "").trim()
       };
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(audioBlob);
-    });
+    })
+    .filter(word =>
+      word.start !== null &&
+      word.end !== null &&
+      word.end >= word.start &&
+      word.text.length > 0
+    );
+}
+
+
+// Normalize transcription segments.
+function normalizeSegments(response) {
+  const source = Array.isArray(response)
+    ? response
+    : response.segments || response.lines || [];
+
+  if (!Array.isArray(source)) {
+    throw new Error("The server returned an unsupported response.");
   }
 
-  async transcribeWithAPI(audioBlob) {
-    if (!this.apiEndpoint || !this.apiKey) {
-      throw new Error('API not configured.');
-    }
+  const segments = source
+    .map(segment => {
+      const start = normalizeTime(
+        segment.start ?? segment.start_time
+      );
 
-    const formData = new FormData();
-    formData.append('audio', audioBlob);
-    formData.append('model', 'whisper-1');
-    formData.append('response_format', 'verbose_json');
-    formData.append('timestamp_granularities[]', 'word');
+      const end = normalizeTime(
+        segment.end ?? segment.end_time
+      );
 
-    const response = await fetch(this.apiEndpoint, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${this.apiKey}` },
-      body: formData
+      return {
+        time: start,
+        end,
+        text: String(segment.text || "").trim(),
+        words: normalizeWords(segment.words)
+      };
+    })
+    .filter(segment =>
+      segment.time !== null &&
+      segment.text.length > 0 &&
+      (
+        segment.end === null ||
+        segment.end >= segment.time
+      )
+    )
+    .sort((a, b) => a.time - b.time);
+
+  if (segments.length === 0) {
+    throw new Error(
+      "No timestamped lyrics were returned. Check the audio and server."
+    );
+  }
+
+  return segments;
+}
+
+
+// Main transcription function.
+export async function transcribeAudio(
+  audioFile,
+  endpoint,
+  options = {}
+) {
+  if (!(audioFile instanceof Blob)) {
+    throw new TypeError("Please select a valid audio file.");
+  }
+
+  if (audioFile.size === 0) {
+    throw new Error("The selected audio file is empty.");
+  }
+
+  if (audioFile.size > MAX_AUDIO_SIZE) {
+    throw new Error("Audio file is too large. Maximum size is 100 MB.");
+  }
+
+  const serverURL = validateEndpoint(endpoint);
+
+  const timeout = Number(options.timeout) || DEFAULT_TIMEOUT;
+
+  const controller = new AbortController();
+
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeout);
+
+  const formData = new FormData();
+
+  const filename = options.filename || "music-audio";
+
+  formData.append("audio", audioFile, filename);
+
+  if (options.language) {
+    formData.append("language", options.language);
+  }
+
+  formData.append("timestamps", "true");
+  formData.append("word_timestamps", "true");
+
+  try {
+    const response = await fetch(serverURL, {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json"
+      }
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
+      let message = `Transcription server error: ${response.status}`;
 
-    const data = await response.json();
-    const lines = [];
-    const words = [];
+      try {
+        const errorData = await response.json();
 
-    if (data.words) {
-      data.words.forEach(w => words.push({ start: w.start, end: w.end, word: w.word }));
-    }
-    if (data.segments) {
-      data.segments.forEach(seg => lines.push({ start: seg.start, end: seg.end, text: seg.text }));
-    }
-
-    return { lines, words, source: 'api' };
-  }
-
-  async transcribe(audioBlob, options = {}) {
-    try {
-      return await this.transcribeWithWhisper(audioBlob, options);
-    } catch (error) {
-      console.warn('Local transcription failed, trying API fallback:', error);
-      if (this.apiKey) {
-        return await this.transcribeWithAPI(audioBlob);
-      } else {
-        throw new Error('All transcription methods failed.');
+        if (errorData.error || errorData.message) {
+          message = errorData.error || errorData.message;
+        }
+      } catch {
+        // Keep the original error message.
       }
-    }
-  }
 
-  parseLRC(lrcContent) {
-    const lines = [];
-    const regex = /\[(\d+):(\d+)(?:\.(\d+))?\](.*)/g;
-    let match;
-
-    while ((match = regex.exec(lrcContent)) !== null) {
-      const minutes = parseInt(match[1]);
-      const seconds = parseInt(match[2]);
-      const hundredths = match[3] ? parseInt(match[3]) : 0;
-      const text = match[4].trim();
-      
-      const time = minutes * 60 + seconds + hundredths / 100;
-      
-      if (text) {
-        lines.push({ start: time, end: time + 5, text: text });
-      }
+      throw new Error(message);
     }
 
-    lines.sort((a, b) => a.start - b.start);
+    const contentType =
+      response.headers.get("content-type") || "";
 
-    for (let i = 0; i < lines.length - 1; i++) {
-      lines[i].end = lines[i + 1].start;
+    if (!contentType.includes("application/json")) {
+      throw new Error(
+        "The transcription server did not return JSON."
+      );
     }
 
-    return { lines, words: [], source: 'lrc' };
-  }
+    const result = await response.json();
 
-  setProgressCallback(callback) {
-    this.progressCallback = callback;
-  }
+    if (result.error) {
+      throw new Error(String(result.error));
+    }
 
-  configureAPI(endpoint, key) {
-    this.apiEndpoint = endpoint;
-    this.apiKey = key;
+    return {
+      lyrics: normalizeSegments(result),
+      source: "ai-transcription",
+      wordTimestampsAvailable: (
+        result.segments || result.lines || []
+      ).some(segment =>
+        Array.isArray(segment.words) &&
+        segment.words.length > 0
+      ),
+      language: result.language || null,
+      model: result.model || null
+    };
+
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(
+        "Transcription timed out. Try again or use a smaller audio file."
+      );
+    }
+
+    if (error instanceof TypeError) {
+      throw new Error(
+        "Cannot reach the transcription server. Check your internet connection and server URL."
+      );
+    }
+
+    throw error;
+
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
-const transcriptionEngine = new TranscriptionEngine();
+
+// Check whether a transcription server is reachable.
+export async function checkTranscriptionServer(endpoint) {
+  const serverURL = validateEndpoint(endpoint);
+
+  const controller = new AbortController();
+
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, 10000);
+
+  try {
+    const response = await fetch(serverURL, {
+      method: "GET",
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json"
+      }
+    });
+
+    return {
+      connected: response.ok,
+      status: response.status,
+      message: response.ok
+        ? "Transcription server is reachable."
+        : "Server responded but returned an error."
+    };
+
+  } catch (error) {
+    return {
+      connected: false,
+      status: null,
+      message: error.name === "AbortError"
+        ? "Connection timed out."
+        : "Could not connect to the transcription server."
+    };
+
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+
+// Default export.
+const transcriptionEngine = {
+  validateEndpoint,
+  transcribeAudio,
+  checkTranscriptionServer
+};
+
+export default transcriptionEngine;

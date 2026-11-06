@@ -1,191 +1,812 @@
-/**
- * IndexedDB wrapper for My Music Lyrics
- * Handles: songs metadata, playlists, lyrics, settings, recent plays
- */
 
-class MusicStorage {
-  constructor() {
-    this.dbName = 'MyMusicLyricsDB';
-    this.version = 1;
-    this.db = null;
-  }
+/* =========================================
+   MY MUSIC LYRICS
+   FILE: storage.js
+   IndexedDB Storage Engine
+========================================= */
 
-  async init() {
+const DB_NAME = "MyMusicLyricsDB";
+const DB_VERSION = 1;
+
+let database = null;
+
+/* =========================================
+   DATABASE INITIALIZATION
+========================================= */
+
+export function initializeStorage() {
+
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.version);
-      
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve(this.db);
-      };
-      
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        
-        if (!db.objectStoreNames.contains('songs')) {
-          const songStore = db.createObjectStore('songs', { keyPath: 'id', autoIncrement: true });
-          songStore.createIndex('title', 'title', { unique: false });
-          songStore.createIndex('artist', 'artist', { unique: false });
-          songStore.createIndex('lastPlayed', 'lastPlayed', { unique: false });
+
+        if (database) {
+            resolve(database);
+            return;
         }
-        
-        if (!db.objectStoreNames.contains('playlists')) {
-          db.createObjectStore('playlists', { keyPath: 'id', autoIncrement: true });
+
+        if (!("indexedDB" in window)) {
+            reject(new Error("IndexedDB is not supported by this browser."));
+            return;
         }
-        
-        if (!db.objectStoreNames.contains('lyrics')) {
-          db.createObjectStore('lyrics', { keyPath: 'songId' });
-        }
-        
-        if (!db.objectStoreNames.contains('settings')) {
-          db.createObjectStore('settings', { keyPath: 'key' });
-        }
-        
-        if (!db.objectStoreNames.contains('recent')) {
-          db.createObjectStore('recent', { keyPath: 'id', autoIncrement: true });
-        }
-      };
-    });
-  }
 
-  async saveSong(songData) {
-    const tx = this.db.transaction(['songs'], 'readwrite');
-    const store = tx.objectStore('songs');
-    const request = store.add(songData);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-  async getSong(id) {
-    const tx = this.db.transaction(['songs'], 'readonly');
-    const store = tx.objectStore('songs');
-    const request = store.get(id);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+        request.onupgradeneeded = (event) => {
 
-  async getAllSongs() {
-    const tx = this.db.transaction(['songs'], 'readonly');
-    const store = tx.objectStore('songs');
-    const request = store.getAll();
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
-  }
+            const db = event.target.result;
 
-  async updateSong(id, updates) {
-    const song = await this.getSong(id);
-    if (!song) throw new Error('Song not found');
-    const updated = { ...song, ...updates };
-    const tx = this.db.transaction(['songs'], 'readwrite');
-    const store = tx.objectStore('songs');
-    const request = store.put(updated);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+            if (!db.objectStoreNames.contains("songs")) {
 
-  async deleteSong(id) {
-    const tx = this.db.transaction(['songs'], 'readwrite');
-    const store = tx.objectStore('songs');
-    const request = store.delete(id);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
+                const songs = db.createObjectStore(
+                    "songs",
+                    { keyPath: "id" }
+                );
 
-  async saveLyrics(songId, lyricsData) {
-    const tx = this.db.transaction(['lyrics'], 'readwrite');
-    const store = tx.objectStore('lyrics');
-    const data = { songId, ...lyricsData, updated: Date.now() };
-    const request = store.put(data);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+                songs.createIndex("title", "title", {
+                    unique: false
+                });
 
-  async getLyrics(songId) {
-    const tx = this.db.transaction(['lyrics'], 'readonly');
-    const store = tx.objectStore('lyrics');
-    const request = store.get(songId);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+                songs.createIndex("artist", "artist", {
+                    unique: false
+                });
+            }
 
-  async savePlaylist(playlist) {
-    const tx = this.db.transaction(['playlists'], 'readwrite');
-    const store = tx.objectStore('playlists');
-    const request = store.put(playlist);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+            if (!db.objectStoreNames.contains("playlists")) {
 
-  async getAllPlaylists() {
-    const tx = this.db.transaction(['playlists'], 'readonly');
-    const store = tx.objectStore('playlists');
-    const request = store.getAll();
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
-  }
+                db.createObjectStore(
+                    "playlists",
+                    { keyPath: "id" }
+                );
+            }
 
-  async addToRecent(songId) {
-    const tx = this.db.transaction(['recent'], 'readwrite');
-    const store = tx.objectStore('recent');
-    const request = store.add({ songId, timestamp: Date.now() });
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+            if (!db.objectStoreNames.contains("lyrics")) {
 
-  async getRecent(limit = 20) {
-    const tx = this.db.transaction(['recent'], 'readonly');
-    const store = tx.objectStore('recent');
-    const request = store.getAll();
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => {
-        const all = request.result || [];
-        const sorted = all.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
-        resolve(sorted);
-      };
-      request.onerror = () => reject(request.error);
-    });
-  }
+                db.createObjectStore(
+                    "lyrics",
+                    { keyPath: "songId" }
+                );
+            }
 
-  async setSetting(key, value) {
-    const tx = this.db.transaction(['settings'], 'readwrite');
-    const store = tx.objectStore('settings');
-    const request = store.put({ key, value });
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
+            if (!db.objectStoreNames.contains("history")) {
 
-  async getSetting(key, defaultValue = null) {
-    const tx = this.db.transaction(['settings'], 'readonly');
-    const store = tx.objectStore('settings');
-    const request = store.get(key);
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result ? request.result.value : defaultValue);
-      request.onerror = () => reject(request.error);
+                db.createObjectStore(
+                    "history",
+                    { keyPath: "songId" }
+                );
+            }
+
+            if (!db.objectStoreNames.contains("settings")) {
+
+                db.createObjectStore(
+                    "settings",
+                    { keyPath: "key" }
+                );
+            }
+
+        };
+
+        request.onsuccess = () => {
+
+            database = request.result;
+
+            database.onversionchange = () => {
+                database.close();
+                database = null;
+            };
+
+            resolve(database);
+
+        };
+
+        request.onerror = () => {
+
+            reject(
+                request.error ||
+                new Error("Could not initialize music database.")
+            );
+
+        };
+
+        request.onblocked = () => {
+
+            reject(
+                new Error("Database upgrade blocked. Close other app tabs.")
+            );
+
+        };
+
     });
-  }
+
 }
 
-const storage = new MusicStorage();
+
+/* =========================================
+   DATABASE TRANSACTION HELPER
+========================================= */
+
+async function executeTransaction(
+    storeName,
+    mode,
+    operation
+) {
+
+    const db = await initializeStorage();
+
+    return new Promise((resolve, reject) => {
+
+        let transaction;
+
+        try {
+
+            transaction = db.transaction(
+                storeName,
+                mode
+            );
+
+        } catch (error) {
+
+            reject(error);
+            return;
+
+        }
+
+        const store = transaction.objectStore(storeName);
+
+        let result;
+
+        try {
+
+            result = operation(store);
+
+        } catch (error) {
+
+            try {
+                transaction.abort();
+            } catch (_) {}
+
+            reject(error);
+            return;
+
+        }
+
+        transaction.oncomplete = () => {
+            resolve(result);
+        };
+
+        transaction.onerror = () => {
+
+            reject(
+                transaction.error ||
+                new Error("Database transaction failed.")
+            );
+
+        };
+
+        transaction.onabort = () => {
+
+            reject(
+                transaction.error ||
+                new Error("Database transaction was aborted.")
+            );
+
+        };
+
+    });
+
+}
+
+
+/* =========================================
+   GENERIC DATABASE HELPERS
+========================================= */
+
+async function getAll(storeName) {
+
+    const db = await initializeStorage();
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction(
+            storeName,
+            "readonly"
+        );
+
+        const request = transaction
+            .objectStore(storeName)
+            .getAll();
+
+        request.onsuccess = () => {
+            resolve(request.result || []);
+        };
+
+        request.onerror = () => {
+            reject(request.error);
+        };
+
+    });
+
+}
+
+
+async function getRecord(storeName, key) {
+
+    const db = await initializeStorage();
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction(
+            storeName,
+            "readonly"
+        );
+
+        const request = transaction
+            .objectStore(storeName)
+            .get(key);
+
+        request.onsuccess = () => {
+            resolve(request.result || null);
+        };
+
+        request.onerror = () => {
+            reject(request.error);
+        };
+
+    });
+
+}
+
+
+async function deleteRecord(storeName, key) {
+
+    return executeTransaction(
+        storeName,
+        "readwrite",
+        store => store.delete(key)
+    );
+
+}
+
+
+/* =========================================
+   SONG LIBRARY
+========================================= */
+
+export async function saveSong(song) {
+
+    if (!song || !song.id) {
+
+        throw new Error("A valid song ID is required.");
+
+    }
+
+    const record = {
+        ...song,
+        updatedAt: Date.now()
+    };
+
+    return executeTransaction(
+        "songs",
+        "readwrite",
+        store => store.put(record)
+    );
+
+}
+
+
+export async function getSong(songId) {
+
+    return getRecord("songs", songId);
+
+}
+
+
+export async function getAllSongs() {
+
+    const songs = await getAll("songs");
+
+    return songs.sort((a, b) => {
+
+        return (a.title || "").localeCompare(
+            b.title || ""
+        );
+
+    });
+
+}
+
+
+export async function deleteSong(songId) {
+
+    const db = await initializeStorage();
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction(
+            ["songs", "lyrics", "history"],
+            "readwrite"
+        );
+
+        transaction.objectStore("songs").delete(songId);
+
+        transaction.objectStore("lyrics").delete(songId);
+
+        transaction.objectStore("history").delete(songId);
+
+        transaction.oncomplete = resolve;
+
+        transaction.onerror = () => {
+            reject(transaction.error);
+        };
+
+    });
+
+}
+
+
+/* =========================================
+   PLAYLIST MANAGEMENT
+========================================= */
+
+export async function savePlaylist(playlist) {
+
+    if (!playlist || !playlist.id) {
+
+        throw new Error("A valid playlist ID is required.");
+
+    }
+
+    const record = {
+
+        ...playlist,
+
+        name: playlist.name || "Untitled Playlist",
+
+        songIds: Array.isArray(playlist.songIds)
+            ? playlist.songIds
+            : [],
+
+        updatedAt: Date.now()
+
+    };
+
+    return executeTransaction(
+        "playlists",
+        "readwrite",
+        store => store.put(record)
+    );
+
+}
+
+
+export async function getAllPlaylists() {
+
+    const playlists = await getAll("playlists");
+
+    return playlists.sort((a, b) => {
+
+        return (b.updatedAt || 0) -
+               (a.updatedAt || 0);
+
+    });
+
+}
+
+
+export async function getPlaylist(playlistId) {
+
+    return getRecord("playlists", playlistId);
+
+}
+
+
+export async function deletePlaylist(playlistId) {
+
+    return deleteRecord("playlists", playlistId);
+
+}
+
+
+export async function addSongToPlaylist(
+    playlistId,
+    songId
+) {
+
+    const playlist = await getPlaylist(playlistId);
+
+    if (!playlist) {
+
+        throw new Error("Playlist not found.");
+
+    }
+
+    if (!playlist.songIds.includes(songId)) {
+
+        playlist.songIds.push(songId);
+
+        await savePlaylist(playlist);
+
+    }
+
+    return playlist;
+
+}
+
+
+export async function removeSongFromPlaylist(
+    playlistId,
+    songId
+) {
+
+    const playlist = await getPlaylist(playlistId);
+
+    if (!playlist) {
+
+        throw new Error("Playlist not found.");
+
+    }
+
+    playlist.songIds = playlist.songIds.filter(
+        id => id !== songId
+    );
+
+    await savePlaylist(playlist);
+
+    return playlist;
+
+}
+
+
+/* =========================================
+   LYRICS STORAGE
+========================================= */
+
+export async function saveLyrics(songId, lyrics) {
+
+    if (!songId || !Array.isArray(lyrics)) {
+
+        throw new Error("Invalid lyrics data.");
+
+    }
+
+    const record = {
+
+        songId,
+
+        lines: lyrics,
+
+        updatedAt: Date.now()
+
+    };
+
+    return executeTransaction(
+        "lyrics",
+        "readwrite",
+        store => store.put(record)
+    );
+
+}
+
+
+export async function getLyrics(songId) {
+
+    const record = await getRecord(
+        "lyrics",
+        songId
+    );
+
+    return record ? record.lines : null;
+
+}
+
+
+export async function deleteLyrics(songId) {
+
+    return deleteRecord("lyrics", songId);
+
+}
+
+
+/* =========================================
+   RECENTLY PLAYED HISTORY
+========================================= */
+
+export async function addToHistory(songId) {
+
+    if (!songId) {
+        return;
+    }
+
+    const record = {
+
+        songId,
+
+        playedAt: Date.now()
+
+    };
+
+    return executeTransaction(
+        "history",
+        "readwrite",
+        store => store.put(record)
+    );
+
+}
+
+
+export async function getRecentlyPlayed(limit = 20) {
+
+    const history = await getAll("history");
+
+    return history
+        .sort((a, b) => b.playedAt - a.playedAt)
+        .slice(0, Math.max(0, limit));
+
+}
+
+
+export async function clearHistory() {
+
+    return executeTransaction(
+        "history",
+        "readwrite",
+        store => store.clear()
+    );
+
+}
+
+
+/* =========================================
+   FAVORITES
+========================================= */
+
+export async function setFavorite(songId, favorite) {
+
+    const song = await getSong(songId);
+
+    if (!song) {
+
+        throw new Error("Song not found.");
+
+    }
+
+    song.favorite = Boolean(favorite);
+
+    await saveSong(song);
+
+    return song;
+
+}
+
+
+export async function getFavorites() {
+
+    const songs = await getAllSongs();
+
+    return songs.filter(song => song.favorite === true);
+
+}
+
+
+/* =========================================
+   APPLICATION SETTINGS
+========================================= */
+
+export async function saveSetting(key, value) {
+
+    if (!key) {
+
+        throw new Error("Setting key is required.");
+
+    }
+
+    const record = {
+
+        key,
+
+        value,
+
+        updatedAt: Date.now()
+
+    };
+
+    return executeTransaction(
+        "settings",
+        "readwrite",
+        store => store.put(record)
+    );
+
+}
+
+
+export async function getSetting(key, defaultValue = null) {
+
+    const record = await getRecord(
+        "settings",
+        key
+    );
+
+    return record ? record.value : defaultValue;
+
+}
+
+
+/* =========================================
+   DATABASE STATISTICS
+========================================= */
+
+export async function getStorageStatistics() {
+
+    const [
+        songs,
+        playlists,
+        lyrics,
+        history
+    ] = await Promise.all([
+
+        getAll("songs"),
+
+        getAll("playlists"),
+
+        getAll("lyrics"),
+
+        getAll("history")
+
+    ]);
+
+    return {
+
+        totalSongs: songs.length,
+
+        totalPlaylists: playlists.length,
+
+        totalLyrics: lyrics.length,
+
+        recentlyPlayed: history.length
+
+    };
+
+}
+
+
+/* =========================================
+   EXPORT USER DATA
+========================================= */
+
+export async function exportLibrary() {
+
+    const [
+
+        songs,
+        playlists,
+        lyrics,
+        history
+
+    ] = await Promise.all([
+
+        getAll("songs"),
+
+        getAll("playlists"),
+
+        getAll("lyrics"),
+
+        getAll("history")
+
+    ]);
+
+    return {
+
+        application: "My Music Lyrics",
+
+        version: 1,
+
+        exportedAt: new Date().toISOString(),
+
+        songs,
+
+        playlists,
+
+        lyrics,
+
+        history
+
+    };
+
+}
+
+
+/* =========================================
+   IMPORT USER DATA
+========================================= */
+
+export async function importLibrary(data) {
+
+    if (!data || data.application !== "My Music Lyrics") {
+
+        throw new Error("Invalid My Music Lyrics backup.");
+
+    }
+
+    const collections = [
+
+        ["songs", data.songs],
+
+        ["playlists", data.playlists],
+
+        ["lyrics", data.lyrics],
+
+        ["history", data.history]
+
+    ];
+
+    const db = await initializeStorage();
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction(
+
+            collections.map(item => item[0]),
+
+            "readwrite"
+
+        );
+
+        for (const [storeName, records] of collections) {
+
+            if (!Array.isArray(records)) {
+                continue;
+            }
+
+            const store = transaction.objectStore(storeName);
+
+            for (const record of records) {
+
+                try {
+
+                    store.put(record);
+
+                } catch (error) {
+
+                    transaction.abort();
+
+                    reject(error);
+
+                    return;
+
+                }
+
+            }
+
+        }
+
+        transaction.oncomplete = resolve;
+
+        transaction.onerror = () => {
+            reject(transaction.error);
+        };
+
+        transaction.onabort = () => {
+            reject(
+                transaction.error ||
+                new Error("Backup import failed.")
+            );
+        };
+
+    });
+
+}
+
+
+/* =========================================
+   CLOSE DATABASE
+========================================= */
+
+export function closeStorage() {
+
+    if (database) {
+
+        database.close();
+
+        database = null;
+
+    }
+
+}

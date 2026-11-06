@@ -1,32 +1,18 @@
+
 {
+  "id": "./",
   "name": "My Music Lyrics",
-  "short_name": "MusicLyrics",
-  "description": "Advanced music player with automatic lyric synchronization",
+  "short_name": "Music Lyrics",
+  "description": "A personal music player with synchronized lyrics, playlists and music transcription.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#000000",
-  "theme_color": "#000000",
-  "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
-  "categories": ["music", "entertainment"],
-  "shortcuts": [
-    {
-      "name": "Now Playing",
-      "url": "./index.html#now-playing",
-      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
-    }
+  "background_color": "#080810",
+  "theme_color": "#080810",
+  "categories": [
+    "music",
+    "entertainment",
+    "utilities"
   ]
 }
