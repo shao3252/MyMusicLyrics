@@ -199,17 +199,12 @@ export function getCurrentWordIndex(line, currentTime) {
 }
 
 
-// Create a safe lyrics display.
+// Create a safe lyrics display with line and word-level synchronization.
 export function renderLyrics(container, lyrics, currentTime, options = {}) {
   if (!container) return -1;
 
   const normalized = normalizeLyrics(lyrics);
-
-  const activeIndex = getCurrentLineIndex(
-    normalized,
-    currentTime
-  );
-
+  const activeIndex = getCurrentLineIndex(normalized, currentTime);
   const autoScroll = options.autoScroll !== false;
 
   // Rebuild only when the lyrics data changes.
@@ -218,15 +213,23 @@ export function renderLyrics(container, lyrics, currentTime, options = {}) {
 
     normalized.forEach((line, index) => {
       const element = document.createElement("div");
-
       element.className = "lyric-line";
       element.dataset.index = String(index);
 
-      const textElement = document.createElement("span");
-      textElement.className = "lyric-text";
-      textElement.textContent = line.text;
-
-      element.appendChild(textElement);
+      if (line.words.length > 0) {
+        line.words.forEach((word, wordIndex) => {
+          const span = document.createElement("span");
+          span.className = "lyric-word";
+          span.dataset.wordIndex = String(wordIndex);
+          span.textContent = word.text + (wordIndex < line.words.length - 1 ? " " : "");
+          element.appendChild(span);
+        });
+      } else {
+        const textElement = document.createElement("span");
+        textElement.className = "lyric-text";
+        textElement.textContent = line.text;
+        element.appendChild(textElement);
+      }
 
       container.appendChild(element);
     });
@@ -235,26 +238,32 @@ export function renderLyrics(container, lyrics, currentTime, options = {}) {
     container.dataset.activeIndex = "-1";
   }
 
-  // Update highlighting.
-  if (container.dataset.lyricsReady === "true") {
-    const elements = container.querySelectorAll(".lyric-line");
+  const elements = container.querySelectorAll(".lyric-line");
+  elements.forEach((element, index) => {
+    const line = normalized[index];
+    const active = index === activeIndex;
 
-    elements.forEach((element, index) => {
-      const active = index === activeIndex;
+    element.classList.toggle("active", active);
+    element.classList.toggle("inactive", !active);
 
-      element.classList.toggle("active", active);
-      element.classList.toggle("inactive", !active);
+    if (active) {
+      element.setAttribute("aria-current", "true");
+    } else {
+      element.removeAttribute("aria-current");
+    }
 
-      if (active) {
-        element.setAttribute("aria-current", "true");
-      } else {
-        element.removeAttribute("aria-current");
-      }
+    // Highlight the currently sung word using its absolute audio timestamp.
+    const wordElements = element.querySelectorAll(".lyric-word");
+    wordElements.forEach((wordElement, wordIndex) => {
+      const word = line.words[wordIndex];
+      const wordActive = active &&
+        Number(currentTime) >= word.start &&
+        Number(currentTime) <= word.end;
+      wordElement.classList.toggle("active", wordActive);
     });
-  }
+  });
 
   const previousIndex = Number(container.dataset.activeIndex);
-
   if (
     autoScroll &&
     activeIndex >= 0 &&
@@ -264,14 +273,14 @@ export function renderLyrics(container, lyrics, currentTime, options = {}) {
       `[data-index="${activeIndex}"]`
     );
 
+    // Instant scrolling avoids repeated smooth-scroll animations piling up.
     activeElement?.scrollIntoView({
-      behavior: "smooth",
+      behavior: "auto",
       block: "center"
     });
   }
 
   container.dataset.activeIndex = String(activeIndex);
-
   return activeIndex;
 }
 
