@@ -627,10 +627,12 @@ function setupMusicImport() {
 // MUSIC PLAYER
 // --------------------------------------------------
 
+let songSwitchRequestId = 0;
+
 async function playSong(song) {
   if (!song) return;
 
-  // Switch the interface immediately; never leave the previous song's lyrics visible.
+  const requestId = ++songSwitchRequestId;
   state.currentSong = song;
   lyricsLookupRequestId++;
   state.currentLyrics = [];
@@ -638,25 +640,37 @@ async function playSong(song) {
   renderPlayer();
   displayCurrentLyrics();
   updateProgress();
+  showScreen("player");
 
   try {
-    const playlist = state.songs;
+    // setPlaylist() removes unavailable entries, so calculate the index
+    // against the exact playable list to avoid selecting a different track.
+    const playlist = state.songs.filter(item =>
+      item && (item.file || item.url || item.handle)
+    );
     const index = playlist.findIndex(item => item.id === song.id);
-    if (index < 0) throw new Error("This song is no longer in your library.");
+    if (index < 0) throw new Error("This song is no longer available. Please add it again.");
 
     audioEngine.setPlaylist(playlist, index);
     const loaded = await audioEngine.loadSong(index, true);
-    if (!loaded || audioEngine.getCurrentSong()?.id !== song.id) return;
 
+    // Ignore a slow earlier selection if another song was chosen meanwhile.
+    if (requestId !== songSwitchRequestId) return;
+    const activeSong = audioEngine.getCurrentSong();
+    if (!loaded || activeSong?.id !== song.id) return;
+
+    state.currentSong = activeSong;
+    renderPlayer();
     await addToHistory(song.id);
-    if (audioEngine.getCurrentSong()?.id !== song.id) return;
+    if (requestId !== songSwitchRequestId ||
+        audioEngine.getCurrentSong()?.id !== song.id) return;
     await refreshRecentSongs();
     renderPlayer();
-    await loadCurrentSongLyrics();
-    showScreen("player");
+    // Lyrics are loaded by the single songchange handler.
   } catch (error) {
+    if (requestId !== songSwitchRequestId) return;
     console.error("Playback error:", error);
-    showToast("Unable to play this song. Check the audio file.");
+    showToast(error.message || "Unable to play this song. Check the audio file.");
   }
 }
 
@@ -945,6 +959,18 @@ function setupSpectrum() {
 
 function setupAudioEvents() {
   audioEngine.on("loadedmetadata", () => {
+    // Always take the displayed track from the audio engine once the new
+    // file has actually loaded, not from a stale card or earlier request.
+    const activeSong = audioEngine.getCurrentSong();
+    if (activeSong && state.currentSong?.id !== activeSong.id) {
+      state.currentSong = activeSong;
+      lyricsLookupRequestId++;
+      state.currentLyrics = [];
+      state.currentLyricsSource = "loading";
+      renderPlayer();
+      displayCurrentLyrics();
+      loadCurrentSongLyrics();
+    }
     updateProgress();
   });
 
@@ -954,12 +980,13 @@ function setupAudioEvents() {
 
   audioEngine.on("songchange", ({ song }) => {
     if (!song) return;
-    state.currentSong = song;
+    state.currentSong = audioEngine.getCurrentSong() || song;
     lyricsLookupRequestId++;
     state.currentLyrics = [];
     state.currentLyricsSource = "loading";
     renderPlayer();
     displayCurrentLyrics();
+    updateMiniLyrics();
     updateProgress();
     loadCurrentSongLyrics();
   });
