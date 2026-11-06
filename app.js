@@ -384,7 +384,7 @@ async function importMusicFiles(files) {
   let unsupported = 0;
   let failed = 0;
 
-  const supportedExtensions = /\\.(mp3|wav|m4a|aac|ogg|flac|opus|webm|aiff|wma)$/i;
+  const supportedExtensions = /\.(mp3|wav|m4a|aac|ogg|flac|opus|webm|aiff|wma)$/i;
 
   for (const file of Array.from(files)) {
     const fileName = file.name || "";
@@ -424,7 +424,7 @@ async function importMusicFiles(files) {
       continue;
     }
 
-    const title = fileName.replace(/\\.[^/.]+$/, "");
+    const title = fileName.replace(/\.[^/.]+$/, "");
     const song = {
       id: makeId(),
       title,
