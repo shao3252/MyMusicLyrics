@@ -201,6 +201,20 @@
 
             </div>
 
+            <button class="text-button edit-song-details-trigger" id="editSongDetailsButton">
+                ✎ Edit music details
+            </button>
+
+            <form class="song-details-editor" id="songDetailsEditor" hidden>
+                <label>Song title<input id="editSongTitle" class="settings-input" maxlength="120" required></label>
+                <label>Artist<input id="editSongArtist" class="settings-input" maxlength="120"></label>
+                <label>Album<input id="editSongAlbum" class="settings-input" maxlength="120"></label>
+                <div class="song-details-editor-actions">
+                    <button class="primary-button" type="submit">Save details</button>
+                    <button class="secondary-button" type="button" id="cancelSongDetails">Cancel</button>
+                </div>
+            </form>
+
 
             <!-- AUDIO PROGRESS -->
             <div class="progress-container">
@@ -348,6 +362,12 @@
                         <option value="sunset">Sunset</option>
                         <option value="ocean">Ocean Blue</option>
                         <option value="karaoke">Karaoke Highlight</option>
+                        <option value="rose">Rose Gold</option>
+                        <option value="forest">Emerald Forest</option>
+                        <option value="midnight">Midnight Black</option>
+                        <option value="vintage">Vintage Film</option>
+                        <option value="lavender">Soft Lavender</option>
+                        <option value="fire">Electric Fire</option>
                     </select>
                 </label>
                 <label class="lyrics-tool-field">
@@ -363,12 +383,24 @@
                     ⇩ Create Lyrics Video
                 </button>
                 <button class="secondary-button full-button" id="stopLyricsVideo" hidden>
-                    Stop recording
+                    Finish video now
                 </button>
+                <a class="primary-button full-button lyrics-download-link" id="downloadLyricsVideo" hidden>
+                    ⇩ Download Video
+                </a>
                 <p class="lyrics-export-note" id="lyricsExportStatus">
-                    Preview themes also change the exported video. Video exports as WebM where supported.
+                    Create the video while your song plays, then tap Download Video. Chrome usually exports WebM.
                 </p>
             </div>
+
+            <section class="lyrics-spectrum-preview" aria-label="Lyrics audio spectrum">
+                <div class="spectrum-heading">
+                    <span class="spectrum-dot"></span>
+                    <strong>LIVE AUDIO SPECTRUM</strong>
+                    <span id="lyricsSpectrumStatus">READY</span>
+                </div>
+                <div class="spectrum-bars lyrics-spectrum-bars" id="lyricsSpectrumBars" aria-hidden="true"></div>
+            </section>
 
             <div class="lyrics-display" id="lyricsDisplay">
 
