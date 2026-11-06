@@ -1793,3 +1793,89 @@ button:active,
     #playerScreen .player-controls { margin: 10px 0 13px; }
     #playerScreen .player-lyrics-card { min-height: 120px; }
 }
+
+
+/* =========================================================
+   READABILITY UPDATE — clearer text, stronger contrast
+   and more comfortable desktop width
+========================================================= */
+:root {
+    --text: #F8F5FF;
+    --muted: #B8B1C7;
+    --border: rgba(210,190,255,.22);
+}
+
+body { color: #FAF8FF; }
+
+@media (min-width: 601px) {
+    .app-container { max-width: 720px; }
+    .bottom-navigation { max-width: 720px; }
+    .mini-player { width: min(calc(100% - 32px), 688px); }
+    .main-content { padding-left: clamp(24px, 4vw, 34px); padding-right: clamp(24px, 4vw, 34px); }
+}
+
+.brand-text p,
+.eyebrow,
+.song-info span,
+.summary-card > span:last-child,
+.empty-state p,
+.lyrics-status,
+.lyrics-placeholder p,
+.settings-item small,
+.setting-description p,
+.settings-note,
+.input-label,
+.time-information,
+.mini-player-info span {
+    color: #B8B1C7;
+}
+
+.brand-text p { font-size: 11px; }
+.eyebrow { font-size: 11px; }
+.welcome-section > p:last-child { font-size: 15px; color: #C5BED2; }
+.page-heading h2 { font-size: 30px; }
+.section-heading h3 { font-size: 18px; }
+.summary-card > span:last-child { font-size: 13px; }
+.empty-state h3 { font-size: 16px; }
+.empty-state p { font-size: 13px; }
+.primary-button, .secondary-button { font-size: 14px; }
+.search-box input { font-size: 15px; }
+.song-toolbar > span { font-size: 13px; color: #C2BBD0; }
+.song-info strong { font-size: 14px; }
+.song-info span { font-size: 12px; }
+.track-details p { color: #C2BBD0; font-size: 13px; }
+.time-information { font-size: 12px; }
+.lyrics-card-heading strong { font-size: 12px; }
+#playerScreen .mini-lyrics .mini-lyric-line { color: #B9B0C9; font-size: 14px; }
+#playerScreen .mini-lyrics .mini-lyric-line.active { font-size: 18px; }
+.spectrum-heading strong { font-size: 11px; color: #E0D8ED; }
+.spectrum-heading #spectrumStatus { color: #B7ABC9; font-size: 10px; }
+.lyrics-status { font-size: 12px; }
+.lyrics-topbar h2 { font-size: 24px; }
+.lyrics-song-info strong { font-size: 14px; }
+.lyrics-song-info p { font-size: 12px; color: #B8B1C7; }
+.lyric-line { font-size: clamp(18px, 4.5vw, 21px); color: #AAA2B8; }
+.lyric-line.active { color: #F1E8FF; }
+.lyric-line.past { color: #C0B9CC; }
+.settings-group h3 { font-size: 16px; }
+.settings-item strong { font-size: 14px; }
+.settings-item small { font-size: 12px; }
+.setting-description strong { font-size: 14px; }
+.setting-description p { font-size: 13px; }
+.settings-note, .input-label { font-size: 12px; }
+.settings-input { font-size: 14px; }
+.nav-item small { font-size: 11px; }
+.mini-player-info strong { font-size: 13px; }
+.mini-player-info span { font-size: 11px; }
+.toast { font-size: 13px; }
+
+button:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 3px solid #D4B6FF;
+    outline-offset: 3px;
+}
+
+@media (max-width: 380px) {
+    .welcome-section > p:last-child { font-size: 14px; }
+    .song-info strong { font-size: 13px; }
+    .song-info span { font-size: 11px; }
+}
