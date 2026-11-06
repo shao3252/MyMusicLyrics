@@ -856,10 +856,10 @@ function normalizeTrackText(value) {
   return String(value || "")
     .normalize("NFKD")
     .toLowerCase()
-    .replace(/\\([^)]*\\)|\\[[^\\]]*\\]/g, " ")
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
-    .replace(/\\s+/g, " ");
+    .replace(/\s+/g, " ");
 }
 
 function isUnknownArtist(value) {
