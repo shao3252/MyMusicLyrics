@@ -492,12 +492,9 @@ export async function saveLyrics(songId, lyrics) {
 
 export async function getLyrics(songId) {
 
-    const record = await getRecord(
-        "lyrics",
-        songId
-    );
-
-    return record ? record.lines : null;
+    // Return the full record so the app can preserve the lyrics source
+    // (manual, imported LRC, transcription, or automatic provider).
+    return getRecord("lyrics", songId);
 
 }
 
