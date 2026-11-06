@@ -384,16 +384,69 @@ async function importMusicFiles(files) {
   let unsupported = 0;
   let failed = 0;
 
-  const supportedExtensions = /\.(mp3|wav|m4a|aac|ogg|flac|opus|webm|aiff|wma)$/i;
+  const supportedExtensions = new Set([
+    "mp3", "wav", "m4a", "aac", "ogg", "flac",
+    "opus", "webm", "aiff", "wma", "mp4"
+  ]);
+
+  async function isSupportedAudioFile(file) {
+    const cleanName = String(file.name || "")
+      .trim()
+      .split(/[\\/]/)
+      .pop()
+      .toLowerCase();
+    const extension = cleanName.includes(".")
+      ? cleanName.split(".").pop()
+      : "";
+    const mimeType = String(file.type || "").toLowerCase();
+
+    // Trust a supported audio extension or browser audio MIME type.
+    if (supportedExtensions.has(extension) || mimeType.startsWith("audio/")) {
+      return true;
+    }
+
+    // Some desktop browsers report an empty or incorrect MIME type.
+    // Check common audio file signatures instead.
+    try {
+      const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+      const ascii = (start, length) =>
+        String.fromCharCode(...bytes.slice(start, start + length));
+
+      // ID3-tagged MP3, MPEG audio frame sync, WAV, FLAC, OGG,
+      // AIFF, MP4/M4A and AAC/ADTS.
+      const hasID3 = ascii(0, 3) === "ID3";
+      const hasMpegFrame = bytes.length >= 2 &&
+        bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
+      const isWav = ascii(0, 4) === "RIFF" && ascii(8, 4) === "WAVE";
+      const isFlac = ascii(0, 4) === "fLaC";
+      const isOgg = ascii(0, 4) === "OggS";
+      const isAiff = ascii(0, 4) === "FORM" &&
+        ["AIFF", "AIFC"].includes(ascii(8, 4));
+      const isMp4 = ascii(4, 4) === "ftyp";
+      const isAac = ascii(0, 4) === "ADIF" ||
+        (bytes.length >= 2 && bytes[0] === 0xff &&
+          (bytes[1] & 0xf6) === 0xf0);
+
+      return hasID3 || hasMpegFrame || isWav || isFlac ||
+        isOgg || isAiff || isMp4 || isAac;
+    } catch (error) {
+      console.warn("Could not inspect audio file signature:", error);
+      return false;
+    }
+  }
 
   for (const file of Array.from(files)) {
-    const fileName = file.name || "";
-    const mimeType = (file.type || "").toLowerCase();
-    const hasAudioExtension = supportedExtensions.test(fileName);
-    const isAudio = mimeType.startsWith("audio/") || hasAudioExtension;
+    const fileName = String(file.name || "").trim();
+    const mimeType = String(file.type || "").toLowerCase();
+    const isAudio = await isSupportedAudioFile(file);
 
     if (!isAudio) {
       unsupported++;
+      console.warn("Rejected selected file:", {
+        name: fileName,
+        type: mimeType,
+        size: file.size
+      });
       continue;
     }
 
