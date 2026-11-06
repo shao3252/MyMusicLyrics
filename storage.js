@@ -462,20 +462,24 @@ export async function removeSongFromPlaylist(
 
 export async function saveLyrics(songId, lyrics) {
 
-    if (!songId || !Array.isArray(lyrics)) {
+    if (!songId) {
+        throw new Error("A song must be selected before saving lyrics.");
+    }
 
-        throw new Error("Invalid lyrics data.");
+    // Accept both the original array format and the app's { lines, source } format.
+    const lines = Array.isArray(lyrics)
+        ? lyrics
+        : (lyrics && Array.isArray(lyrics.lines) ? lyrics.lines : null);
 
+    if (!lines) {
+        throw new Error("Lyrics must contain a valid lines array.");
     }
 
     const record = {
-
         songId,
-
-        lines: lyrics,
-
+        lines,
+        source: Array.isArray(lyrics) ? "manual" : (lyrics.source || "manual"),
         updatedAt: Date.now()
-
     };
 
     return executeTransaction(
@@ -485,7 +489,6 @@ export async function saveLyrics(songId, lyrics) {
     );
 
 }
-
 
 export async function getLyrics(songId) {
 
