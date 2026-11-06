@@ -914,10 +914,36 @@ async function requestLrclib(url) {
   return response.json();
 }
 
+async function waitForSongDuration(song) {
+  const currentDuration = Number(audioEngine.getDuration()) || 0;
+  if (currentDuration > 0) return currentDuration;
+
+  const audio = audioEngine.audio;
+  if (!audio || audioEngine.getCurrentSong()?.id !== song.id) return 0;
+
+  await new Promise(resolve => {
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      audio.removeEventListener("loadedmetadata", finish);
+      clearTimeout(timeoutId);
+      resolve();
+    };
+
+    audio.addEventListener("loadedmetadata", finish, { once: true });
+    const timeoutId = setTimeout(finish, 2500);
+  });
+
+  return audioEngine.getCurrentSong()?.id === song.id
+    ? Number(audioEngine.getDuration()) || 0
+    : 0;
+}
+
 async function findAutomaticLyrics(song) {
   const title = String(song.title || "").trim();
   const artist = String(song.artist || "").trim();
-  const duration = Number(audioEngine.getDuration()) || 0;
+  const duration = await waitForSongDuration(song);
 
   if (!title || normalizeTrackText(title) === "unknown song") return null;
 
