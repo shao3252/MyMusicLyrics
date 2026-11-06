@@ -813,6 +813,13 @@ let spectrumContext = null;
 let spectrumAnalyser = null;
 let spectrumFrame = null;
 let spectrumSource = null;
+let lyricsExportRecorder = null;
+let lyricsExportTimer = null;
+let lyricsExportFrame = null;
+let lyricsExportDestination = null;
+let lyricsExportCanvasStream = null;
+let lyricsExportEndHandler = null;
+
 
 function setupSpectrum() {
   const bars = $("spectrumBars");
@@ -1309,6 +1316,322 @@ async function importLRCFile(file) {
 }
 
 
+
+const LYRICS_VIDEO_THEMES = {
+  neon: { background: ["#090514", "#241044", "#070711"], accent: "#C99BFF", text: "#FFFFFF", muted: "#BFB0D6" },
+  minimal: { background: ["#080B12", "#18202C", "#080B12"], accent: "#FFFFFF", text: "#FFFFFF", muted: "#AAB4C2" },
+  sunset: { background: ["#210D20", "#6B2440", "#160D24"], accent: "#FFB17B", text: "#FFF4EA", muted: "#E5B7B0" },
+  ocean: { background: ["#041521", "#073B55", "#06101F"], accent: "#65E4FF", text: "#F0FCFF", muted: "#A5D4E1" },
+  karaoke: { background: ["#090914", "#19132D", "#080811"], accent: "#FFE66D", text: "#FFFFFF", muted: "#BDB8D0" }
+};
+
+function applyLyricsTheme(theme) {
+  const allowed = Object.prototype.hasOwnProperty.call(LYRICS_VIDEO_THEMES, theme)
+    ? theme
+    : "neon";
+  const display = $("lyricsDisplay");
+  if (display) display.dataset.theme = allowed;
+  return allowed;
+}
+
+function setupLyricsPresentation() {
+  const themeSelect = $("lyricsThemeSelect");
+  if (themeSelect) {
+    themeSelect.addEventListener("change", async () => {
+      const theme = applyLyricsTheme(themeSelect.value);
+      await saveSetting("lyricsTheme", theme);
+      showToast("Lyrics preview theme updated.");
+    });
+  }
+
+  $("exportLyricsVideo")?.addEventListener("click", exportLyricsVideo);
+  $("stopLyricsVideo")?.addEventListener("click", stopLyricsVideo);
+}
+
+function wrapCanvasText(context, text, maxWidth) {
+  const words = String(text || "").split(/\s+/);
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? line + " " + word : word;
+    if (line && context.measureText(candidate).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawLyricsVideoFrame(context, canvas, startedAt, themeName) {
+  const theme = LYRICS_VIDEO_THEMES[themeName] || LYRICS_VIDEO_THEMES.neon;
+  const width = canvas.width;
+  const height = canvas.height;
+  const elapsed = (performance.now() - startedAt) / 1000;
+  const currentTime = audioEngine.getCurrentTime();
+  const gradient = context.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, theme.background[0]);
+  gradient.addColorStop(0.55, theme.background[1]);
+  gradient.addColorStop(1, theme.background[2]);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+
+  const glow = context.createRadialGradient(width * 0.5, height * 0.43, 20, width * 0.5, height * 0.43, 560);
+  glow.addColorStop(0, theme.accent + "35");
+  glow.addColorStop(1, "transparent");
+  context.fillStyle = glow;
+  context.fillRect(0, 0, width, height);
+
+  const song = state.currentSong || audioEngine.getCurrentSong() || {};
+  context.textAlign = "center";
+  context.fillStyle = theme.accent;
+  context.font = "700 24px Arial, sans-serif";
+  context.fillText("MY MUSIC LYRICS", width / 2, 100);
+  context.fillStyle = theme.text;
+  context.font = "700 34px Arial, sans-serif";
+  const titleLines = wrapCanvasText(context, getSongTitle(song), 590).slice(0, 2);
+  titleLines.forEach((line, i) => context.fillText(line, width / 2, 165 + i * 43));
+  context.fillStyle = theme.muted;
+  context.font = "24px Arial, sans-serif";
+  context.fillText(getSongArtist(song), width / 2, 265);
+
+  const bars = 44;
+  const barWidth = 8;
+  const gap = 5;
+  const totalWidth = bars * (barWidth + gap);
+  const startX = (width - totalWidth) / 2;
+  const frequency = spectrumAnalyser
+    ? new Uint8Array(spectrumAnalyser.frequencyBinCount)
+    : null;
+  if (frequency) spectrumAnalyser.getByteFrequencyData(frequency);
+  for (let i = 0; i < bars; i++) {
+    const raw = frequency ? frequency[Math.floor(i * frequency.length / bars)] / 255 : 0.18;
+    const wave = 0.12 + Math.abs(Math.sin(elapsed * 3.2 + i * 0.43)) * 0.2;
+    const barHeight = 12 + (raw || wave) * 105;
+    const x = startX + i * (barWidth + gap);
+    context.globalAlpha = 0.8;
+    context.fillStyle = theme.accent;
+    context.beginPath();
+    context.roundRect(x, 405 - barHeight / 2, barWidth, barHeight, 5);
+    context.fill();
+  }
+  context.globalAlpha = 1;
+
+  const lyrics = state.currentLyrics || [];
+  let activeIndex = -1;
+  if (lyrics.length && lyrics.some(line => Number.isFinite(line.time))) {
+    lyrics.forEach((line, index) => {
+      if (Number.isFinite(line.time) && line.time <= currentTime) activeIndex = index;
+    });
+    if (activeIndex < 0) activeIndex = 0;
+  } else if (lyrics.length) {
+    activeIndex = Math.min(lyrics.length - 1, Math.floor(elapsed / 3.5));
+  }
+
+  const activeLine = activeIndex >= 0 ? lyrics[activeIndex] : null;
+  const previousLine = activeIndex > 0 ? lyrics[activeIndex - 1] : null;
+  const nextLine = activeIndex >= 0 ? lyrics[activeIndex + 1] : null;
+
+  context.textAlign = "center";
+  if (previousLine) {
+    context.fillStyle = theme.muted;
+    context.globalAlpha = 0.65;
+    context.font = "26px Arial, sans-serif";
+    wrapCanvasText(context, previousLine.text, 590).slice(0, 2)
+      .forEach((line, i) => context.fillText(line, width / 2, 620 + i * 38));
+  }
+  context.globalAlpha = 1;
+
+  if (activeLine) {
+    context.shadowColor = theme.accent;
+    context.shadowBlur = 24;
+    context.fillStyle = theme.text;
+    context.font = "bold 43px Arial, sans-serif";
+    const activeLines = wrapCanvasText(context, activeLine.text, 610).slice(0, 3);
+    activeLines.forEach((line, i) => context.fillText(line, width / 2, 735 + i * 60));
+    context.shadowBlur = 0;
+  } else {
+    context.fillStyle = theme.muted;
+    context.font = "28px Arial, sans-serif";
+    context.fillText("Your lyrics will appear here", width / 2, 720);
+  }
+
+  if (nextLine) {
+    context.fillStyle = theme.muted;
+    context.globalAlpha = 0.7;
+    context.font = "25px Arial, sans-serif";
+    wrapCanvasText(context, nextLine.text, 590).slice(0, 2)
+      .forEach((line, i) => context.fillText(line, width / 2, 900 + i * 38));
+  }
+  context.globalAlpha = 1;
+
+  context.fillStyle = theme.accent;
+  context.font = "600 20px Arial, sans-serif";
+  context.fillText("Listen • Read • Feel the music", width / 2, 1120);
+  context.fillStyle = theme.muted;
+  context.font = "18px Arial, sans-serif";
+  context.fillText("Open My Music Lyrics", width / 2, 1160);
+}
+
+function stopLyricsVideo() {
+  if (lyricsExportTimer) {
+    clearTimeout(lyricsExportTimer);
+    lyricsExportTimer = null;
+  }
+  if (lyricsExportFrame) {
+    cancelAnimationFrame(lyricsExportFrame);
+    lyricsExportFrame = null;
+  }
+  if (lyricsExportRecorder && lyricsExportRecorder.state !== "inactive") {
+    lyricsExportRecorder.stop();
+  }
+}
+
+async function exportLyricsVideo() {
+  const song = state.currentSong || audioEngine.getCurrentSong();
+  if (!song) {
+    showToast("Play or select a song first.");
+    return;
+  }
+  if (!state.currentLyrics.length) {
+    showToast("Load or generate lyrics before creating a video.");
+    return;
+  }
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
+    showToast("Video recording is not supported in this browser. Try Chrome.");
+    return;
+  }
+  if (lyricsExportRecorder && lyricsExportRecorder.state !== "inactive") {
+    showToast("A lyrics video is already recording.");
+    return;
+  }
+
+  const button = $("exportLyricsVideo");
+  const status = $("lyricsExportStatus");
+  const stopButton = $("stopLyricsVideo");
+  const themeName = applyLyricsTheme($("lyricsThemeSelect")?.value || "neon");
+  const durationChoice = $("lyricsVideoDuration")?.value || "30";
+  const clipDuration = durationChoice === "full" ? 0 : Math.max(5, Number(durationChoice) || 30);
+
+  try {
+    setupSpectrum();
+    if (!spectrumContext || !spectrumSource) {
+      throw new Error("Audio capture could not be initialized. Press Play once, then try again.");
+    }
+    await spectrumContext.resume();
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 720;
+    canvas.height = 1280;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not create the video preview.");
+
+    lyricsExportDestination = spectrumContext.createMediaStreamDestination();
+    spectrumSource.connect(lyricsExportDestination);
+    lyricsExportCanvasStream = canvas.captureStream(30);
+
+    const tracks = [
+      ...lyricsExportCanvasStream.getVideoTracks(),
+      ...lyricsExportDestination.stream.getAudioTracks()
+    ];
+    const combinedStream = new MediaStream(tracks);
+    const mimeTypes = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+      "video/mp4"
+    ];
+    const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
+    if (!mimeType) throw new Error("This browser does not support a compatible video format.");
+
+    const chunks = [];
+    lyricsExportRecorder = new MediaRecorder(combinedStream, { mimeType });
+    const recorder = lyricsExportRecorder;
+    const startedAt = performance.now();
+
+    const draw = () => {
+      drawLyricsVideoFrame(context, canvas, startedAt, themeName);
+      lyricsExportFrame = requestAnimationFrame(draw);
+    };
+    draw();
+
+    recorder.addEventListener("dataavailable", event => {
+      if (event.data && event.data.size) chunks.push(event.data);
+    });
+    recorder.addEventListener("stop", () => {
+      const blob = new Blob(chunks, { type: recorder.mimeType || mimeType });
+      combinedStream.getTracks().forEach(track => track.stop());
+      lyricsExportCanvasStream = null;
+      if (lyricsExportDestination) {
+        lyricsExportDestination.stream.getTracks().forEach(track => track.stop());
+        try { spectrumSource.disconnect(lyricsExportDestination); } catch (_) {}
+        lyricsExportDestination = null;
+      }
+      if (lyricsExportEndHandler) {
+        audioEngine.audio.removeEventListener("ended", lyricsExportEndHandler);
+        lyricsExportEndHandler = null;
+      }
+      lyricsExportRecorder = null;
+      if (stopButton) stopButton.hidden = true;
+      if (button) {
+        button.disabled = false;
+        button.textContent = "⇩ Create Lyrics Video";
+      }
+      if (status) status.textContent = "Preparing your video...";
+      if (blob.size) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const safeName = (getSongTitle(song) || "music").replace(/[^a-z0-9-_]+/gi, "-").replace(/^-|-$/g, "");
+        link.href = url;
+        link.download = "My-Music-Lyrics-" + (safeName || "video") + ".webm";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        if (status) status.textContent = "Video created. Check your Downloads folder.";
+        showToast("Lyrics video created.");
+      } else {
+        if (status) status.textContent = "No video data was recorded. Please try again.";
+      }
+    });
+
+    recorder.start(250);
+    if (!audioEngine.isPlaying()) {
+      const played = await audioEngine.play();
+      if (!played) throw new Error("Could not start the song for recording.");
+    }
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Recording video...";
+    }
+    if (stopButton) stopButton.hidden = false;
+    if (status) {
+      status.textContent = clipDuration
+        ? "Recording a " + clipDuration + "-second video with audio..."
+        : "Recording until the song ends...";
+    }
+
+    if (clipDuration) {
+      lyricsExportTimer = setTimeout(stopLyricsVideo, clipDuration * 1000);
+    } else {
+      lyricsExportEndHandler = stopLyricsVideo;
+      audioEngine.audio.addEventListener("ended", lyricsExportEndHandler, { once: true });
+    }
+  } catch (error) {
+    console.error("Lyrics video export failed:", error);
+    stopLyricsVideo();
+    if (button) {
+      button.disabled = false;
+      button.textContent = "⇩ Create Lyrics Video";
+    }
+    if (stopButton) stopButton.hidden = true;
+    if (status) status.textContent = error.message || "Video export failed.";
+    showToast(error.message || "Could not create video.", 5000);
+  }
+}
+
 function setupLyricsImport() {
   $("loadLrcButton")?.addEventListener("click", () => {
     if (!state.currentSong) {
@@ -1751,6 +2074,11 @@ async function loadSettings() {
     $("transcriptionEndpoint").value = endpoint || "";
   }
 
+  const savedLyricsTheme = await getSetting("lyricsTheme", "neon");
+  const themeSelect = $("lyricsThemeSelect");
+  if (themeSelect) themeSelect.value = savedLyricsTheme || "neon";
+  applyLyricsTheme(savedLyricsTheme || "neon");
+
   const volume = await getSetting("volume", 1);
 
   audioEngine.setVolume(Number(volume));
@@ -1924,6 +2252,7 @@ async function initializeApp() {
     setupPlayerControls();
     setupAudioEvents();
     setupLyricsImport();
+    setupLyricsPresentation();
     setupLyricsEditor();
     setupTranscription();
     setupPlaylists();
