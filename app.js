@@ -272,7 +272,8 @@ function setupMoreMenus() {
 }
 
 
-function setupNavigation() {\n  setupMoreMenus();
+function setupNavigation() {
+  setupMoreMenus();
   document.querySelectorAll("[data-screen]").forEach(item => {
     item.addEventListener("click", () => {
       showScreen(item.dataset.screen);
