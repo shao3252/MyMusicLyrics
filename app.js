@@ -788,32 +788,48 @@ function updateMiniLyrics() {
 
   if (!state.currentSong || state.currentLyrics.length === 0) {
     container.textContent = "Lyrics will appear here when available.";
-    delete container.dataset.lyricsText;
+    delete container.dataset.lyricsKey;
+    return;
+  }
+
+  const timed = state.currentLyrics.every(line =>
+    Number.isFinite(line.time) && line.time >= 0
+  );
+
+  if (!timed) {
+    const key = "untimed:" + state.currentLyrics.map(line => line.text).join("|");
+    if (container.dataset.lyricsKey === key) return;
+
+    container.replaceChildren();
+    const notice = document.createElement("p");
+    notice.className = "mini-lyric-line";
+    notice.textContent = "These lyrics have no timestamps, so live synchronization is unavailable.";
+    container.appendChild(notice);
+
+    state.currentLyrics.slice(0, 3).forEach(line => {
+      const paragraph = document.createElement("p");
+      paragraph.className = "mini-lyric-line";
+      paragraph.textContent = line.text;
+      container.appendChild(paragraph);
+    });
+    container.dataset.lyricsKey = key;
     return;
   }
 
   const currentTime = audioEngine.getCurrentTime();
-  const duration = audioEngine.getDuration();
-  const timed = state.currentLyrics.some(line => Number.isFinite(line.time));
-
   let active = 0;
-  if (timed) {
-    state.currentLyrics.forEach((line, index) => {
-      if (Number.isFinite(line.time) && line.time <= currentTime) active = index;
-    });
-  } else if (duration > 0 && state.currentLyrics.length > 1) {
-    // Plain lyrics have no timestamps. Move through lines evenly as an approximate guide.
-    active = Math.min(state.currentLyrics.length - 1,
-      Math.floor((currentTime / duration) * state.currentLyrics.length));
-  }
+  state.currentLyrics.forEach((line, index) => {
+    if (line.time <= currentTime) active = index;
+  });
 
-  const visible = state.currentLyrics.slice(Math.max(0, active - 1), active + 3);
-  const key = active + ":" + visible.map(line => line.text).join("|");
+  const visibleStart = Math.max(0, active - 1);
+  const visible = state.currentLyrics.slice(visibleStart, active + 3);
+  const key = "timed:" + active + ":" + visible.map(line => line.text).join("|");
   if (container.dataset.lyricsKey === key) return;
 
   container.replaceChildren();
   visible.forEach((line, offset) => {
-    const index = Math.max(0, active - 1) + offset;
+    const index = visibleStart + offset;
     const paragraph = document.createElement("p");
     paragraph.className = "mini-lyric-line" + (index === active ? " active" : "");
     paragraph.textContent = line.text;
