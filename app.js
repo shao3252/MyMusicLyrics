@@ -380,39 +380,58 @@ async function importMusicFiles(files) {
   if (!files || files.length === 0) return;
 
   let imported = 0;
-  let skipped = 0;
+  let refreshed = 0;
+  let unsupported = 0;
   let failed = 0;
-  const supportedExtensions = /\.(mp3|wav|m4a|aac|ogg|flac|opus|webm|aiff|wma)$/i;
+
+  const supportedExtensions = /\\.(mp3|wav|m4a|aac|ogg|flac|opus|webm|aiff|wma)$/i;
 
   for (const file of Array.from(files)) {
-    // Desktop browsers may return an empty or generic MIME type.
-    // Accept known audio extensions as a reliable fallback.
-    const isAudio = (file.type || "").toLowerCase().startsWith("audio/") ||
-      supportedExtensions.test(file.name || "");
+    const fileName = file.name || "";
+    const mimeType = (file.type || "").toLowerCase();
+    const hasAudioExtension = supportedExtensions.test(fileName);
+    const isAudio = mimeType.startsWith("audio/") || hasAudioExtension;
 
     if (!isAudio) {
-      skipped++;
+      unsupported++;
       continue;
     }
 
-    const alreadyExists = state.songs.some(song =>
-      song.name === file.name &&
-      song.size === file.size
+    // If a matching library entry already exists, refresh its stored file.
+    // This repairs older entries that may have metadata but no playable audio Blob.
+    const existingIndex = state.songs.findIndex(song =>
+      song.name === fileName && Number(song.size) === Number(file.size)
     );
 
-    if (alreadyExists) {
-      skipped++;
+    if (existingIndex !== -1) {
+      const existingSong = state.songs[existingIndex];
+      const refreshedSong = {
+        ...existingSong,
+        file,
+        type: mimeType || existingSong.type || "audio/mpeg",
+        size: file.size,
+        name: fileName
+      };
+
+      try {
+        await saveSong(refreshedSong);
+        state.songs[existingIndex] = refreshedSong;
+        refreshed++;
+      } catch (error) {
+        failed++;
+        console.error("Could not refresh stored music file:", fileName, error);
+      }
       continue;
     }
 
-    const title = file.name.replace(/\.[^/.]+$/, "");
+    const title = fileName.replace(/\\.[^/.]+$/, "");
     const song = {
       id: makeId(),
       title,
       artist: "Unknown Artist",
       album: "Unknown Album",
-      name: file.name,
-      type: file.type || "audio/" + (file.name.split(".").pop() || "unknown").toLowerCase(),
+      name: fileName,
+      type: mimeType || "audio/mpeg",
       size: file.size,
       duration: 0,
       file,
@@ -426,16 +445,19 @@ async function importMusicFiles(files) {
       imported++;
     } catch (error) {
       failed++;
-      console.error("Could not save song:", file.name, error);
+      console.error("Could not save song:", fileName, error);
     }
   }
 
-  if (imported > 0) {
-    showToast(`${imported} song(s) added successfully.`);
+  if (imported > 0 || refreshed > 0) {
+    const messages = [];
+    if (imported > 0) messages.push(`${imported} new song(s) added`);
+    if (refreshed > 0) messages.push(`${refreshed} existing song file(s) refreshed`);
+    showToast(messages.join("; ") + ".");
   } else if (failed > 0) {
     showToast("Could not save music. Browser storage may be full or unavailable.");
-  } else if (skipped > 0) {
-    showToast("No new supported audio files were added. Check the file format or duplicates.");
+  } else if (unsupported > 0) {
+    showToast("The selected file is not a supported audio format. Choose MP3, WAV, M4A, or another supported audio file.");
   } else {
     showToast("No music files were selected.");
   }
