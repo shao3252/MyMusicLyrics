@@ -472,6 +472,7 @@ async function playSong(song) {
     await refreshRecentSongs();
 
     renderPlayer();
+    await loadCurrentSongLyrics();
     showScreen("player");
 
   } catch (error) {
@@ -554,6 +555,8 @@ function updateProgress() {
       { autoScroll: state.autoScrollLyrics }
     );
   }
+
+  updateMiniLyrics();
 }
 
 
@@ -720,6 +723,45 @@ async function loadCurrentSongLyrics() {
 }
 
 
+function updateMiniLyrics() {
+  const container = $("miniLyrics");
+  if (!container) return;
+
+  if (!state.currentSong || state.currentLyrics.length === 0) {
+    container.textContent = "Lyrics will appear here when available.";
+    delete container.dataset.lyricsText;
+    return;
+  }
+
+  const currentTime = audioEngine.getCurrentTime();
+  const timed = state.currentLyrics.some(line => line.time !== null);
+  let visible;
+
+  if (timed) {
+    let active = -1;
+    state.currentLyrics.forEach((line, index) => {
+      if (line.time !== null && line.time <= currentTime) active = index;
+    });
+    const start = active >= 0 ? active : Math.max(0, state.currentLyrics.findIndex(line => line.time !== null));
+    visible = state.currentLyrics.slice(start, start + 2);
+  } else {
+    visible = state.currentLyrics.slice(0, 3);
+  }
+
+  const nextText = visible.map(line => line.text).join("\n");
+  if (container.dataset.lyricsText === nextText) return;
+
+  container.replaceChildren();
+  visible.forEach(line => {
+    const paragraph = document.createElement("p");
+    paragraph.className = "mini-lyric-line";
+    paragraph.textContent = line.text;
+    container.appendChild(paragraph);
+  });
+  container.dataset.lyricsText = nextText;
+}
+
+
 function displayCurrentLyrics() {
   const container = $("lyricsDisplay");
 
@@ -743,6 +785,8 @@ function displayCurrentLyrics() {
         ? "Lyrics loaded"
         : "No lyrics available";
   }
+
+  updateMiniLyrics();
 }
 
 
