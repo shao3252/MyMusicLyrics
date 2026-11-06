@@ -6,7 +6,7 @@
  * Progressive Web App Service Worker.
  */
 
-const CACHE_NAME = "my-music-lyrics-v14";
+const CACHE_NAME = "my-music-lyrics-v15";
 
 const APP_FILES = [
   "./",
