@@ -380,9 +380,18 @@ async function importMusicFiles(files) {
   if (!files || files.length === 0) return;
 
   let imported = 0;
+  let skipped = 0;
+  let failed = 0;
+  const supportedExtensions = /\.(mp3|wav|m4a|aac|ogg|flac|opus|webm|aiff|wma)$/i;
 
   for (const file of Array.from(files)) {
-    if (!file.type.startsWith("audio/")) {
+    // Desktop browsers may return an empty or generic MIME type.
+    // Accept known audio extensions as a reliable fallback.
+    const isAudio = (file.type || "").toLowerCase().startsWith("audio/") ||
+      supportedExtensions.test(file.name || "");
+
+    if (!isAudio) {
+      skipped++;
       continue;
     }
 
@@ -391,17 +400,19 @@ async function importMusicFiles(files) {
       song.size === file.size
     );
 
-    if (alreadyExists) continue;
+    if (alreadyExists) {
+      skipped++;
+      continue;
+    }
 
     const title = file.name.replace(/\.[^/.]+$/, "");
-
     const song = {
       id: makeId(),
       title,
       artist: "Unknown Artist",
       album: "Unknown Album",
       name: file.name,
-      type: file.type,
+      type: file.type || "audio/" + (file.name.split(".").pop() || "unknown").toLowerCase(),
       size: file.size,
       duration: 0,
       file,
@@ -414,15 +425,19 @@ async function importMusicFiles(files) {
       state.songs.push(song);
       imported++;
     } catch (error) {
-      console.error("Could not save song:", error);
-      showToast("Storage error while importing music.");
+      failed++;
+      console.error("Could not save song:", file.name, error);
     }
   }
 
   if (imported > 0) {
     showToast(`${imported} song(s) added successfully.`);
+  } else if (failed > 0) {
+    showToast("Could not save music. Browser storage may be full or unavailable.");
+  } else if (skipped > 0) {
+    showToast("No new supported audio files were added. Check the file format or duplicates.");
   } else {
-    showToast("No new supported audio files were added.");
+    showToast("No music files were selected.");
   }
 
   renderSongs();
