@@ -1879,3 +1879,33 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
     .song-info strong { font-size: 13px; }
     .song-info span { font-size: 11px; }
 }
+
+
+/* Functional three-dot action menus */
+.player-topbar, .lyrics-topbar { position: relative; }
+.more-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 80;
+    min-width: 205px;
+    padding: 7px;
+    border: 1px solid rgba(205,180,255,.28);
+    border-radius: 15px;
+    background: #211a30;
+    box-shadow: 0 14px 35px rgba(0,0,0,.55);
+}
+.more-menu-item {
+    display: block;
+    width: 100%;
+    min-height: 46px;
+    padding: 11px 13px;
+    border-radius: 10px;
+    background: transparent;
+    color: #F8F3FF;
+    text-align: left;
+    font-size: 14px;
+}
+.more-menu-item:hover, .more-menu-item:focus-visible {
+    background: rgba(184,139,255,.18);
+}
