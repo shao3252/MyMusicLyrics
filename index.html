@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>My Music Lyrics</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <h1>My Music Lyrics</h1>
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="Search songs, artists...">
+            </div>
+        </header>
+
+        <!-- Home Screen -->
+        <div id="screen-home" class="screen active">
+            <div id="drop-zone" class="drop-zone">
+                <p>📁 Tap to add music or drop files here</p>
+                <input type="file" id="file-input" accept="audio/*" multiple style="display: none;">
+                <button class="btn-primary" id="add-music-btn" style="margin-top: 16px;">Add Music</button>
+            </div>
+
+            <h2 style="margin-top: 24px; margin-bottom: 16px;">Recently Played</h2>
+            <div id="recent-list" class="recent-list"></div>
+
+            <h2 style="margin-top: 24px; margin-bottom: 16px;">Quick Access</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <button class="btn-primary" onclick="musicApp.navigateTo('songs')">🎵 All Songs</button>
+                <button class="btn-primary" onclick="musicApp.navigateTo('playlists')">📋 Playlists</button>
+            </div>
+        </div>
+
+        <!-- All Songs Screen -->
+        <div id="screen-songs" class="screen">
+            <h2 style="margin-bottom: 16px;">All Songs</h2>
+            <div id="songs-list" class="songs-list"></div>
+        </div>
+
+        <!-- Now Playing Screen -->
+        <div id="screen-now-playing" class="screen">
+            <div class="np-artwork" id="np-artwork">
+                <span class="music-icon large">🎵</span>
+            </div>
+            
+            <div class="np-info">
+                <div class="np-title" id="np-title">No song playing</div>
+                <div class="np-artist" id="np-artist">Select a song to play</div>
+            </div>
+
+            <div class="playback-controls">
+                <div class="seek-container">
+                    <span class="time-display" id="current-time">0:00</span>
+                    <input type="range" id="seek-bar" min="0" max="100" value="0">
+                    <span class="time-display" id="total-time">0:00</span>
+                </div>
+
+                <div class="control-buttons">
+                    <button class="control-btn" id="shuffle-btn" title="Shuffle">🔀</button>
+                    <button class="control-btn" id="prev-btn" title="Previous">⏮</button>
+                    <button class="control-btn" id="play-btn" title="Play/Pause">
+                        <span>▶</span>
+                    </button>
+                    <button class="control-btn" id="next-btn" title="Next">⏭</button>
+                    <button class="control-btn" id="repeat-btn" title="Repeat">🔁</button>
+                </div>
+
+                <div class="volume-container">
+                    <span>🔈</span>
+                    <input type="range" id="volume-slider" min="0" max="100" value="100">
+                    <span>🔊</span>
+                </div>
+
+                <button class="btn-primary" onclick="musicApp.navigateTo('lyrics')" style="margin-top: 24px; width: 100%;">
+                    🎤 View Lyrics
+                </button>
+            </div>
+        </div>
+
+        <!-- Lyrics Screen -->
+        <div id="screen-lyrics" class="screen">
+            <div class="lyrics-header">
+                <h2>Lyrics</h2>
+                <div class="lyrics-actions">
+                    <button class="lyrics-btn" onclick="generateLyrics()">Auto-Generate</button>
+                    <button class="lyrics-btn" onclick="importLRC()">Import LRC</button>
+                    <button class="lyrics-btn" onclick="lyricsEngine.toggleEditMode()">Edit</button>
+                </div>
+            </div>
+            <div id="lyrics-container"></div>
+        </div>
+
+        <!-- Playlists Screen -->
+        <div id="screen-playlists" class="screen">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h2>Playlists</h2>
+                <button class="btn-primary" id="create-playlist-btn">+ New</button>
+            </div>
+            <div id="playlists-list" class="playlists-list"></div>
+        </div>
+
+        <!-- Settings Screen -->
+        <div id="screen-settings" class="screen">
+            <h2 style="margin-bottom: 16px;">Settings</h2>
+            
+            <div style="background: var(--bg-card); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 16px;">
+                <h3 style="margin-bottom: 12px;">Transcription</h3>
+                <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">
+                    Configure external transcription API (optional). Local Whisper model downloads automatically on first use.
+                </p>
+                <input type="text" id="api-endpoint" placeholder="API Endpoint (optional)" style="width: 100%; padding: 8px; margin-bottom: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary);">
+                <input type="password" id="api-key" placeholder="API Key (optional)" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary);">
+                <button class="btn-primary" onclick="saveApiSettings()" style="margin-top: 8px; width: 100%;">Save</button>
+            </div>
+
+            <div style="background: var(--bg-card); padding: 16px; border-radius: var(--radius-sm);">
+                <h3 style="margin-bottom: 12px;">About</h3>
+                <p style="font-size: 14px; color: var(--text-secondary);">
+                    My Music Lyrics v1.0<br>
+                    Local music player with automatic lyric synchronization.<br><br>
+                    <strong>Note:</strong> Background playback requires PWA installation. 
+                    Transcription requires internet for model download or API access.
+                </p>
+            </div>
+
+            <button class="btn-primary" id="install-btn" style="display: none; margin-top: 16px; width: 100%;">
+                📲 Install App
+            </button>
+        </div>
+
+        <!-- Mini Player -->
+        <div class="mini-player" id="mini-player" onclick="musicApp.navigateTo('now-playing')">
+            <div class="mini-player-artwork">
+                <span class="music-icon">🎵</span>
+            </div>
+            <div class="mini-player-info">
+                <div class="mini-player-title" id="mini-player-title">No song</div>
+                <div class="mini-player-artist" id="mini-player-artist">Select music</div>
+            </div>
+            <div class="mini-player-controls">
+                <button class="mini-btn" onclick="event.stopPropagation(); audioEngine.toggle()">▶</button>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-screen="home">
+                <span>🏠</span>
+                <span>Home</span>
+            </button>
+            <button class="nav-item" data-screen="songs">
+                <span>🎵</span>
+                <span>Songs</span>
+            </button>
+            <button class="nav-item" data-screen="now-playing">
+                <span>▶</span>
+                <span>Now Playing</span>
+            </button>
+            <button class="nav-item" data-screen="lyrics">
+                <span>🎤</span>
+                <span>Lyrics</span>
+            </button>
+            <button class="nav-item" data-screen="playlists">
+                <span>📋</span>
+                <span>Playlists</span>
+            </button>
+            <button class="nav-item" data-screen="settings">
+                <span>⚙️</span>
+                <span>Settings</span>
+            </button>
+        </nav>
+
+        <!-- Transcription Overlay -->
+        <div class="transcription-overlay" id="transcription-overlay">
+            <div class="transcription-box">
+                <div class="spinner"></div>
+                <p id="transcription-message">Processing...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Whisper WASM (optional - for local transcription) -->
+    <script src="https://cdn.jsdelivr.net/npm/whisper.cpp@1.0.0/dist/whisper.min.js"></script>
+
+    <!-- App Scripts -->
+    <script src="./storage.js"></script>
+    <script src="./transcription.js"></script>
+    <script src="./audio.js"></script>
+    <script src="./lyrics.js"></script>
+    <script src="./app.js"></script>
+
+    <script>
+        function saveApiSettings() {
+            const endpoint = document.getElementById('api-endpoint').value;
+            const key = document.getElementById('api-key').value;
+            transcriptionEngine.configureAPI(endpoint, key);
+            storage.setSetting('apiEndpoint', endpoint);
+            storage.setSetting('apiKey', key);
+            alert('Settings saved');
+        }
+
+        // Load saved settings
+        document.addEventListener('DOMContentLoaded', async () => {
+            const endpoint = await storage.getSetting('apiEndpoint');
+            const key = await storage.getSetting('apiKey');
+            if (endpoint) document.getElementById('api-endpoint').value = endpoint;
+            if (key) document.getElementById('api-key').value = key;
+            if (endpoint && key) transcriptionEngine.configureAPI(endpoint, key);
+        });
+    </script>
+</body>
+</html>
