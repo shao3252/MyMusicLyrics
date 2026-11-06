@@ -933,33 +933,50 @@ function setupLyricsEditor() {
 
   $("applyLyricsButton")?.addEventListener("click", async () => {
     if (!state.currentSong) {
-      showToast("No song selected.");
+      showToast("Select a song before adding lyrics.");
       return;
     }
 
     const text = $("lyricsTextarea")?.value || "";
+    if (!text.trim()) {
+      showToast("Please type or paste your lyrics first.");
+      return;
+    }
 
     const hasTimestamps = /\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]/.test(text);
 
-    const lyrics = hasTimestamps
-      ? parseLRC(text)
-      : parsePlainLyrics(text);
+    try {
+      const parsedLyrics = hasTimestamps
+        ? parseLRC(text)
+        : parsePlainLyrics(text);
 
-    state.currentLyrics = normalizeLyrics(lyrics);
-    state.currentLyricsSource = "manual";
+      const normalizedLyrics = normalizeLyrics(parsedLyrics);
+      if (normalizedLyrics.length === 0) {
+        showToast("No lyrics found. Check the text and try again.");
+        return;
+      }
 
-    await saveLyrics(state.currentSong.id, {
-      lines: state.currentLyrics,
-      source: "manual",
-      updatedAt: Date.now()
-    });
+      await saveLyrics(state.currentSong.id, {
+        lines: normalizedLyrics,
+        source: hasTimestamps ? "lrc" : "manual"
+      });
 
-    displayCurrentLyrics();
+      state.currentLyrics = normalizedLyrics;
+      state.currentLyricsSource = hasTimestamps ? "lrc" : "manual";
+      displayCurrentLyrics();
 
-    $("lyricsEditor")?.classList.remove("active");
-    state.editingLyrics = false;
+      const editor = $("lyricsEditor");
+      if (editor) {
+        editor.classList.remove("active");
+        editor.hidden = true;
+      }
+      state.editingLyrics = false;
 
-    showToast("Lyrics saved.");
+      showToast("Lyrics saved successfully.");
+    } catch (error) {
+      console.error("Could not save edited lyrics:", error);
+      showToast("Could not save lyrics: " + (error.message || "Storage error"), 5000);
+    }
   });
 
   $("saveLyricsButton")?.addEventListener("click", async () => {
