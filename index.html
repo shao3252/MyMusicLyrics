@@ -275,32 +275,29 @@
             </div>
 
 
-            <!-- MINI LYRICS -->
-            <div class="player-lyrics-card">
-
+            <!-- LIVE LYRICS STAGE -->
+            <section class="player-lyrics-card" aria-label="Live lyrics">
                 <div class="lyrics-card-heading">
-
                     <div>
                         <span class="lyrics-indicator"></span>
                         <strong>LIVE LYRICS</strong>
                     </div>
-
-                    <button class="text-button"
-                            data-screen="lyrics">
-                        View all
-                    </button>
-
+                    <button class="text-button" data-screen="lyrics">View all</button>
                 </div>
-
-                <div class="mini-lyrics" id="miniLyrics">
-
-                    <p class="muted">
-                        Lyrics will appear here when available.
-                    </p>
-
+                <div class="mini-lyrics" id="miniLyrics" aria-live="polite">
+                    <p class="muted">Your lyrics will appear here while the song plays.</p>
                 </div>
+            </section>
 
-            </div>
+            <!-- LIVE AUDIO SPECTRUM -->
+            <section class="spectrum-card" aria-label="Audio spectrum">
+                <div class="spectrum-heading">
+                    <span class="spectrum-dot"></span>
+                    <strong>AUDIO SPECTRUM</strong>
+                    <span id="spectrumStatus">READY</span>
+                </div>
+                <div class="spectrum-bars" id="spectrumBars" aria-hidden="true"></div>
+            </section>
 
         </section>
 
